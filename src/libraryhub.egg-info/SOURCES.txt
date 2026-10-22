@@ -1,6 +1,0 @@
-README.md
-pyproject.toml
-src/libraryhub.egg-info/PKG-INFO
-src/libraryhub.egg-info/SOURCES.txt
-src/libraryhub.egg-info/dependency_links.txt
-src/libraryhub.egg-info/top_level.txt
