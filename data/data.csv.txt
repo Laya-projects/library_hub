@@ -1,0 +1,8 @@
+isbn,title,authors,category,parent_category,item_type,pages,price,total_copies
+9780000000011,Wings of Fire,A.P.J. Abdul Kalam;Arun Tiwari,Biography,,Book,180,250,2
+9780000000028,The Alchemist,Paulo Coelho,Fiction,,Book,208,300,1
+9780000000035,Clean Code,Robert C. Martin,Software Engineering,Technology,Book,464,900,1
+9780000000042,Python Crash Course,Eric Matthes,Programming,Technology,Book,544,700,2
+9780000000059,Sapiens,Yuval Noah Harari,History,,Book,512,600,1
+9780000000066,Encyclopaedia of Science,Various,Reference,,Reference,1200,2500,1
+9780000000073,India Today (Oct 2026),Various,Magazines,,Magazine,90,80,3

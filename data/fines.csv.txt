@@ -1,0 +1,5 @@
+loan_id,amount,paid
+L005,10,yes
+L008,40,yes
+L009,80,no
+L010,40,no

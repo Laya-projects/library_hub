@@ -1,0 +1,6 @@
+member_id,name,email,membership_type
+M001,Asha Raman,asha@example.com,Student
+M002,Rahul Mehta,rahul@example.com,Regular
+M003,Sneha Iyer,sneha@example.com,Premium
+M004,Karthik N,karthik@example.com,Student
+M005,Divya Rao,divya@example.com,Regular
