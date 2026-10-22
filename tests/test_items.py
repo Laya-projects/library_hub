@@ -1,5 +1,11 @@
+from datetime import date, timedelta
+
 import pytest
-from libraryhub.errors import InvalidISBNError, ItemNotBorrowableError
+from libraryhub.errors import (
+    InvalidISBNError,
+    ItemNotBorrowableError,
+    ValidationError,
+)
 from libraryhub.items import Book, ItemType, LibraryItem, Magazine, ReferenceItem
 from libraryhub.members import PremiumMember, RegularMember, StudentMember
 
@@ -66,6 +72,7 @@ def make_members():
         "978000000001",  # 12 digits
         "97800000000111",  # 14 digits
         "97800000000ab",  # letters
+        "978000000001a",  # 12 digits and 1 letter
         "978-000000001",  # dash
         " 9780000000011",  # leading space
         "٠٠٠٠٠٠٠٠٠٠٠٠٠",  # 13 digits from another script
@@ -91,7 +98,7 @@ def test_changing_to_a_bad_isbn_raises_and_keeps_the_old_value():
 
 
 def test_negative_copies_are_rejected():
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         make_book(total_copies=-1)
 
 
@@ -101,19 +108,46 @@ def test_zero_copies_are_allowed():
 
 def test_changing_copies_to_negative_raises_and_keeps_the_old_value():
     book = make_book()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         book.total_copies = -5
     assert book.total_copies == 2
 
 
 @pytest.mark.parametrize("blank_title", ["", "   ", "\t\n"])
 def test_blank_title_is_rejected(blank_title):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         make_book(title=blank_title)
 
 
 def test_title_is_stripped():
     assert make_book(title="  Wings of Fire ").title == "Wings of Fire"
+
+
+# --- Pages and price ----------------------------------------------------------
+
+
+@pytest.mark.parametrize("bad_pages", [0, -1])
+def test_pages_must_be_above_zero(bad_pages):
+    with pytest.raises(ValidationError):
+        make_book(pages=bad_pages)
+
+
+def test_negative_price_is_rejected():
+    with pytest.raises(ValidationError):
+        make_book(price=-1)
+
+
+def test_zero_price_is_allowed():
+    assert make_book(price=0).price == 0
+
+
+def test_changing_price_or_pages_to_a_bad_value_raises():
+    book = make_book()
+    with pytest.raises(ValidationError):
+        book.price = -10
+    with pytest.raises(ValidationError):
+        book.pages = 0
+    assert (book.price, book.pages) == (250, 180)
 
 
 # --- Abstract class and item types -----------------------------------------
@@ -193,3 +227,21 @@ def test_repr_shows_the_class_and_the_details():
     assert text.startswith("ReferenceItem(")
     assert "9780000000066" in text
     assert "Encyclopaedia of Science" in text
+
+
+# --- Worked examples from the brief: due dates ------------------------------
+
+ISSUE_DATE = date(2026, 10, 12)
+
+
+@pytest.mark.parametrize(
+    ("member", "item", "due"),
+    [
+        (make_members()[0], make_book(), date(2026, 10, 26)),
+        (make_members()[1], make_book(), date(2026, 11, 2)),
+        (make_members()[2], make_book(), date(2026, 11, 11)),
+        (make_members()[2], make_magazine(), date(2026, 10, 19)),  # R2
+    ],
+)
+def test_due_date_worked_examples(member, item, due):
+    assert ISSUE_DATE + timedelta(days=item.loan_period_for(member)) == due

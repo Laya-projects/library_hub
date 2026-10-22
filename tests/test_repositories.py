@@ -1,7 +1,7 @@
 from datetime import date
 
 import pytest
-from libraryhub.errors import ValidationError
+from libraryhub.errors import LoanNotFoundError, ValidationError
 from libraryhub.items import Book
 from libraryhub.loans import Fine, Loan
 from libraryhub.members import RegularMember, StudentMember
@@ -157,6 +157,30 @@ def test_second_loan_with_the_same_id_is_refused():
     with pytest.raises(ValidationError):
         loans.add(make_loan("L001", member_id="M002"))
     assert len(loans.list_all()) == 1
+
+
+def test_update_replaces_the_stored_loan():
+    loans = InMemoryLoanRepository()
+    loans.add(make_loan("L001"))
+    replacement = make_loan("L001", returned=DAY)
+    loans.update(replacement)
+    assert loans.get("L001") is replacement
+    assert len(loans.list_all()) == 1
+
+
+def test_update_keeps_the_place_in_the_list():
+    loans = InMemoryLoanRepository()
+    for loan_id in ["L001", "L002", "L003"]:
+        loans.add(make_loan(loan_id))
+    loans.update(make_loan("L002", returned=DAY))
+    assert [loan.loan_id for loan in loans.list_all()] == ["L001", "L002", "L003"]
+    assert [loan.loan_id for loan in loans.list_open()] == ["L001", "L003"]
+
+
+def test_update_of_an_unknown_loan_is_refused():
+    loans = InMemoryLoanRepository()
+    with pytest.raises(LoanNotFoundError):
+        loans.update(make_loan("L999"))
 
 
 def test_list_open_leaves_out_returned_loans():

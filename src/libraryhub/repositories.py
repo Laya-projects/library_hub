@@ -13,7 +13,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-from libraryhub.errors import ValidationError
+from libraryhub.errors import LoanNotFoundError, ValidationError
 
 if TYPE_CHECKING:
     from libraryhub.items import LibraryItem
@@ -68,6 +68,13 @@ class LoanRepository(ABC):
     @abstractmethod
     def get(self, loan_id: str) -> Loan | None:
         """The loan with this ID, or None."""
+
+    @abstractmethod
+    def update(self, loan: Loan) -> None:
+        """Save changes to a stored loan (return date, renewals, due date).
+
+        A database repository only sees a change when this is called.
+        """
 
     @abstractmethod
     def list_all(self) -> list[Loan]:
@@ -160,6 +167,13 @@ class InMemoryLoanRepository(LoanRepository):
             if loan.loan_id == loan_id:
                 return loan
         return None
+
+    def update(self, loan: Loan) -> None:
+        for index, stored in enumerate(self._loans):
+            if stored.loan_id == loan.loan_id:
+                self._loans[index] = loan  # same place in the list
+                return
+        raise LoanNotFoundError(loan.loan_id)
 
     def list_all(self) -> list[Loan]:
         return list(self._loans)

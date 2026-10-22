@@ -1,9 +1,10 @@
 from datetime import date
 
 import pytest
+from libraryhub.errors import ValidationError
 from libraryhub.items import Book, Magazine
 from libraryhub.loans import Fine, Loan
-from libraryhub.members import RegularMember, StudentMember
+from libraryhub.members import PremiumMember, RegularMember, StudentMember
 
 TODAY = date(2026, 10, 12)
 
@@ -35,7 +36,7 @@ def make_loan(due, return_date=None, loan_id="L001"):
     return Loan(
         "M001",
         "9780000000011",
-        date(2026, 9, 1),
+        date(2026, 6, 1),
         due,
         loan_id=loan_id,
         return_date=return_date,
@@ -173,6 +174,46 @@ def test_loan_repr_shows_every_field():
     loan = make_loan(date(2026, 10, 5), return_date=date(2026, 10, 6), loan_id="L002")
     assert repr(loan) == (
         "Loan(loan_id='L002', member_id='M001', isbn='9780000000011', "
-        "issue_date=2026-09-01, due_date=2026-10-05, return_date=2026-10-06, "
+        "issue_date=2026-06-01, due_date=2026-10-05, return_date=2026-10-06, "
         "renewals=0)"
     )
+
+
+# --- Renewing (R6) ----------------------------------------------------------
+
+
+def test_renew_pushes_the_due_date_and_counts_the_renewal():
+    sneha = PremiumMember("M003", "Sneha Iyer", "sneha@example.com")
+    loan = Loan(
+        "M003", "9780000000059", date(2026, 9, 20), date(2026, 10, 20), loan_id="L003"
+    )
+    loan.renew(sneha)
+    assert (loan.due_date, loan.renewals) == (date(2026, 11, 19), 1)
+    loan.renew(sneha)
+    assert (loan.due_date, loan.renewals) == (date(2026, 12, 19), 2)
+
+
+# --- A loan or fine that breaks a rule can never exist ---------------------
+
+
+def test_due_date_before_issue_date_is_rejected():
+    with pytest.raises(ValidationError):
+        Loan("M001", "9780000000011", date(2026, 10, 12), date(2026, 10, 11))
+
+
+def test_due_date_on_the_issue_date_is_allowed():
+    assert Loan("M001", "9780000000011", TODAY, TODAY).due_date == TODAY
+
+
+def test_negative_renewals_are_rejected():
+    with pytest.raises(ValidationError):
+        Loan("M001", "9780000000011", TODAY, TODAY, renewals=-1)
+
+
+def test_negative_fine_amount_is_rejected():
+    with pytest.raises(ValidationError):
+        Fine("L009", -1)
+
+
+def test_zero_fine_amount_is_allowed():
+    assert Fine("L009", 0).amount == 0

@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from libraryhub.errors import InvalidISBNError, ItemNotBorrowableError
+from libraryhub.errors import InvalidISBNError, ItemNotBorrowableError, ValidationError
 
 if TYPE_CHECKING:
     from libraryhub.members import Member
@@ -18,6 +18,13 @@ BOOK_MAX_RENEWALS = 2  # R6: a book can be renewed up to 2 times
 # R9: exactly 13 digits. [0-9] is used on purpose: str.isdigit() would also
 # accept digits from other scripts.
 _ISBN_PATTERN = re.compile(r"[0-9]{13}")
+
+
+def validate_isbn(isbn: str) -> str:
+    """Return the ISBN if it is exactly 13 digits (R9), otherwise raise."""
+    if not _ISBN_PATTERN.fullmatch(isbn):
+        raise InvalidISBNError(isbn)
+    return isbn
 
 
 class ItemType(Enum):
@@ -42,14 +49,15 @@ class LibraryItem(ABC):
         price: int,
         total_copies: int,
     ) -> None:
-        self.isbn = isbn  # these three go through their setters, so they are checked
+        # These five go through their setters, so they are checked at creation.
+        self.isbn = isbn
         self.title = title
+        self.pages = pages
+        self.price = price  # whole rupees
         self.total_copies = total_copies
         self.authors = list(authors)  # own copy, so outside changes cannot leak in
         self.category = category
         self.parent_category = parent_category
-        self.pages = pages
-        self.price = price  # whole rupees
 
     @property
     def isbn(self) -> str:
@@ -57,9 +65,7 @@ class LibraryItem(ABC):
 
     @isbn.setter
     def isbn(self, value: str) -> None:
-        if not _ISBN_PATTERN.fullmatch(value):
-            raise InvalidISBNError(value)
-        self._isbn = value
+        self._isbn = validate_isbn(value)
 
     @property
     def title(self) -> str:
@@ -68,8 +74,28 @@ class LibraryItem(ABC):
     @title.setter
     def title(self, value: str) -> None:
         if not value.strip():
-            raise ValueError("Title cannot be blank.")
+            raise ValidationError("title", "Title cannot be blank.")
         self._title = value.strip()
+
+    @property
+    def pages(self) -> int:
+        return self._pages
+
+    @pages.setter
+    def pages(self, value: int) -> None:
+        if value <= 0:
+            raise ValidationError("pages", "Pages must be above 0.")
+        self._pages = value
+
+    @property
+    def price(self) -> int:
+        return self._price
+
+    @price.setter
+    def price(self, value: int) -> None:
+        if value < 0:
+            raise ValidationError("price", "Price cannot be negative.")
+        self._price = value
 
     @property
     def total_copies(self) -> int:
@@ -78,7 +104,7 @@ class LibraryItem(ABC):
     @total_copies.setter
     def total_copies(self, value: int) -> None:
         if value < 0:
-            raise ValueError("Copies cannot be negative.")
+            raise ValidationError("total_copies", "Copies cannot be negative.")
         self._total_copies = value
 
     @abstractmethod
