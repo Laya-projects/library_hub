@@ -109,7 +109,14 @@ class ItemNotAvailableError(LibraryError):
         super().__init__("R7", f"No copies of '{title}' are available.")
         self.title = title
 
+class ValidationError(LibraryError):
+    """Data that is not valid, such as a bad CSV cell or a repeated ID."""
 
+    def __init__(self, field: str, message: str) -> None:
+        super().__init__("ValidationError", message)
+        self.field = field
+
+        
 class RenewalNotAllowedError(LibraryError):
     """R2 or R6: the code depends on the situation, so use a factory method.
 
