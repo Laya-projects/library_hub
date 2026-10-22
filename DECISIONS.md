@@ -51,6 +51,22 @@ Decision log for LibraryHub Mini. Each entry: the problem, the options, what I c
 
 **Consequence for the design.** In the class diagram the `Loan` -> `Member` and `Loan` -> `LibraryItem` links become "refers to by ID".
 
+### D4. Does an exception receive the finished message, or the raw data?
+
+**Problem.** Every error must print as `ERROR [code]: message`, and the Phase 4 API returns the same code and message as JSON. Someone has to build the sentence, for example `Karthik N has unpaid fines of ₹120 (limit ₹100).`
+
+**Options.**
+- **A. The exception receives the finished message.** `Library` builds the text with an f-string and raises `UnpaidFinesError("R4", "Karthik N has unpaid fines of ...")`. Short error classes, but the wording is scattered across `library.py`, and one typo breaks a "character for character" sample.
+- **B. The exception receives the raw data and builds the message itself.** `Library` raises `UnpaidFinesError(member_name, unpaid, limit)`. Each class holds its own wording and also keeps the data (`error.unpaid`) for the API or tests. More code per class.
+
+**Chosen: B.** Each child takes the raw data (names, titles, counts), builds the message in its own `__init__` and passes `code` and `message` to `LibraryError`. `LibraryError.formatted()` is the only place that builds the `ERROR [code]: message` line.
+
+**Why.** All error wording now lives in one file (`errors.py`) and is tested in one file (`test_errors.py`), so matching the samples is easy to check and cannot drift between the console and the API.
+
+**Sub-decision: `RenewalNotAllowedError` is used for R2 and R6.** Its code cannot be fixed in the class. It has three named factory methods instead: `magazine()` gives R2, and `limit_reached(title, times)` and `someone_waiting(title)` give R6. The caller never types a rule code.
+
+**Assumption to confirm.** `ItemNotAvailableError` uses code `R7` (the brief lists it as R7), and its message `No copies of 'X' are available.` is the first half of the waiting-list prompt in the sample. No sample prints it as an `ERROR [...]` line, so this is the one code the samples do not prove.
+
 ---
 
 ## Phase 2: DSA
