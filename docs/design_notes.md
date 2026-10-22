@@ -52,12 +52,11 @@ classDiagram
         -member_id
         -name
         -email
-        +borrow_limit
-        +loan_period_days
-        +fine_per_day
-        +membership_label
+        +borrow_limit()*
+        +loan_period_days()*
+        +fine_per_day()*
+        +membership_label()*
     }
-    note for Member "borrow_limit, loan_period_days, fine_per_day and membership_label are abstract properties"
     class StudentMember
     class RegularMember
     class PremiumMember
@@ -120,17 +119,17 @@ classDiagram
 
 **LibraryItem** (each item type answers):
 - `is_borrowable()`: Book yes, Magazine yes, ReferenceItem no (R1)
-- `loan_period_for(member)`: Book returns `member.loan_period_days`, Magazine returns 7 whatever the member (R2)
+- `loan_period_for(member)`: Book returns `member.loan_period_days()`, Magazine returns 7 whatever the member (R2)
 - `max_renewals()`: Book 2 (R6), Magazine 0 (R2), ReferenceItem 0
 - `item_type()`: "Book", "Magazine" or "Reference" (the `item_type` column in `books.csv`)
 
 `category` and `parent_category` (for example Programming under Technology) are plain data on every item, not abstract questions. They are different from `item_type`.
 
-**Member** (each member type answers, as properties):
-- `borrow_limit`: 3 / 5 / 10 (R3)
-- `loan_period_days`: 14 / 21 / 30
-- `fine_per_day`: 2 / 5 / 3 (R5)
-- `membership_label`: "Student" / "Regular" / "Premium", used by option 7, for example `Student: 3 items, 14 days, ₹2/day`
+**Member** (each member type answers, as methods):
+- `borrow_limit()`: 3 / 5 / 10 (R3)
+- `loan_period_days()`: 14 / 21 / 30
+- `fine_per_day()`: 2 / 5 / 3 (R5)
+- `membership_label()`: "Student" / "Regular" / "Premium", used by option 7, for example `Student: 3 items, 14 days, ₹2/day`
 
 "A student's loan is 14 days" lives in `StudentMember`. "Magazines are 7 days" lives in `Magazine`. `Library.borrow()` never checks the member type, it just asks.
 
@@ -142,29 +141,18 @@ classDiagram
 
 ## 6. Traceability table (copy into README)
 
-| Rule | Method that enforces it | Test that proves it |
-|---|---|---|
-| R1 | | |
-| R2 | | |
-| R3 | | |
-| R4 | | |
-| R5 | | |
-| R6 | | |
-| R7 | | |
-| R8 | | |
-| R9 | | |
-| R10 | | |
+
 
 ### Where each rule will live (design plan, not for the README)
 
-| Rule | Home |
+| Rule | Method that enforces it |
 |---|---|
 | R1 | `ReferenceItem.is_borrowable()`, checked in `Library.borrow()` |
 | R2 | `Magazine.loan_period_for()` and `Magazine.max_renewals()`, checked in `Library.renew()` |
-| R3 | `Member.borrow_limit` (subclasses), compared with the member's open loans in `Library.borrow()` |
+| R3 | `Member.borrow_limit()` (subclasses), compared with the member's open loans in `Library.borrow()` |
 | R4 | `Library.unpaid_fines_for(member_id)` adds up unpaid `Fine` records (D1), compared with ₹100 in `Library.borrow()` |
-| R5 | `Loan.fine(as_of, member, item)` = min(days late × `member.fine_per_day`, `item.price`) |
-| R6 | `Library.renew()` using `Loan.renewals`, `item.max_renewals()`, `member.loan_period_days` and the waiting list |
+| R5 | `Loan.fine(as_of, member, item)` = min(days late × `member.fine_per_day()`, `item.price`) |
+| R6 | `Library.renew()` using `Loan.renewals`, `item.max_renewals()`, `member.loan_period_days()` and the waiting list |
 | R7 | `Library.reserve()` with one FIFO queue per ISBN; availability from `Library.available_copies(isbn)` (D2) |
 | R8 | `Library.borrow()` scans the member's open loans for the same ISBN |
 | R9 | `LibraryItem.isbn` setter plus the unique dict key in `Library` |
@@ -174,9 +162,9 @@ classDiagram
 
 - Added `authors`, `pages`, `category`, `parent_category` to `LibraryItem`. The old abstract `category()` is replaced by `item_type()`, so "category" now only means the data value.
 - Removed `unpaid_fines` from `Member`. Added the `Fine` record (D1). Karthik must come out at ₹120.
-- Added `membership_label` to `Member`.
+- Added `membership_label()` to `Member`.
 - Availability is calculated by `Library.available_copies(isbn)` (D2).
 - `Loan` holds `member_id` and `isbn` (D3), so fine calculation receives the member and item.
-- Library relationships are now composition (`*--`), and the member questions are properties, with no parentheses.
+- Library relationships are now composition (`*--`), and the member questions are methods with parentheses, as the brief says (changed in Step 3, see D5).
 
 Quick check: no `if member_type` anywhere, and every rule R1 to R10 has a home.
