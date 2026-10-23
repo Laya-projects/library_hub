@@ -1,13 +1,18 @@
 from datetime import date
+from types import SimpleNamespace
 
 from libraryhub.formatters import (
     format_catalogue,
     format_days,
     format_member_loans,
+    format_borrowed,
     format_money,
     format_overdue_report,
+    format_renewed,
+    format_returned,
     format_search_results,
     format_table,
+    format_waiting_joined,
 )
 from libraryhub.items import Book
 from libraryhub.library import LoanLine, MemberLoans
@@ -245,3 +250,69 @@ def test_overdue_report_empty():
         "Total overdue: 0   Fines so far: ₹0"
     )
     assert format_overdue_report([], date(2026, 9, 1)) == expected
+
+
+# --- Result messages for options 3 to 6 ---------------------------------------
+
+ASHA = SimpleNamespace(name="Asha Raman")
+ALCHEMIST = SimpleNamespace(title="The Alchemist")
+
+
+def _returned(days_late, fine, next_waiting=None):
+    return SimpleNamespace(
+        member=SimpleNamespace(name="Rahul Mehta"),
+        item=ALCHEMIST,
+        days_late=days_late,
+        fine=fine,
+        next_waiting=next_waiting,
+    )
+
+
+def test_borrowed_message():
+    item = SimpleNamespace(title="Wings of Fire")
+    loan = SimpleNamespace(due_date=date(2026, 10, 26))
+    assert format_borrowed(ASHA, item, loan) == (
+        "OK: Asha Raman borrowed 'Wings of Fire'. Due 2026-10-26."
+    )
+
+
+def test_returned_late_message():
+    assert format_returned(_returned(20, 100)) == (
+        "OK: Rahul Mehta returned 'The Alchemist'. Late by 20 days. Fine: ₹100."
+    )
+
+
+def test_returned_one_day_late_is_singular():
+    text = format_returned(_returned(1, 5))
+    assert "Late by 1 day." in text
+    assert "1 days" not in text
+
+
+def test_returned_on_time_message():
+    assert format_returned(_returned(0, 0)) == (
+        "OK: Rahul Mehta returned 'The Alchemist'. Returned on time. Fine: ₹0."
+    )
+
+
+def test_returned_names_the_next_member_on_the_waiting_list():
+    text = format_returned(_returned(0, 0, next_waiting=ASHA))
+    assert text.splitlines()[-1] == "Next on waiting list: Asha Raman."
+    assert len(text.splitlines()) == 2
+
+
+def test_renewed_message():
+    result = SimpleNamespace(
+        item=SimpleNamespace(title="Sapiens"),
+        renewal_number=1,
+        max_renewals=2,
+        new_due_date=date(2026, 11, 19),
+    )
+    assert format_renewed(result) == (
+        "OK: Renewed 'Sapiens' (renewal 1 of 2). New due date 2026-11-19."
+    )
+
+
+def test_waiting_joined_message():
+    assert format_waiting_joined(ASHA, ALCHEMIST, 1) == (
+        "OK: Asha Raman is #1 on the waiting list for 'The Alchemist'."
+    )

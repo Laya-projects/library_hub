@@ -124,16 +124,204 @@ def test_a_blank_search_prints_the_error_and_the_menu_goes_on(library_world):
     ]
 
 
-# --- Options 3 to 8 are not built yet -----------------------------------------
+# --- Option 3: borrow -----------------------------------------------------------
+
+ALCHEMIST_ISBN = "9780000000028"  # 0 of 1 available
+WINGS_ISBN = "9780000000011"
+MAGAZINE_ISBN = "9780000000073"
+REFERENCE_ISBN = "9780000000066"
 
 
-@pytest.mark.parametrize("choice", ["3", "4", "5", "6", "7", "8"])
-def test_later_options_say_they_are_not_built_yet(library_world, choice):
-    transcript = run_menu(library_world.library, [choice, "0"])
-    assert transcript == [
-        MENU_TEXT,
-        "> " + choice,
-        f"Option {choice} is not built yet.",
+def test_option_3_borrows_a_book(library_world):
+    transcript = run_menu(library_world.library, ["3", "M001", WINGS_ISBN, "0"])
+    assert transcript[1:] == [
+        "> 3",
+        "Member ID: M001",
+        "ISBN: " + WINGS_ISBN,
+        "OK: Asha Raman borrowed 'Wings of Fire'. Due 2026-10-26.",
+        "> 0",
+    ]
+
+
+def test_option_3_unknown_member_is_reported_before_the_isbn_is_asked(library_world):
+    transcript = run_menu(library_world.library, ["3", "M999", "0"])
+    assert transcript[1:] == [
+        "> 3",
+        "Member ID: M999",
+        "ERROR [MemberNotFoundError]: No member with ID M999.",
+        "> 0",
+    ]
+
+
+def test_option_3_bad_isbn(library_world):
+    transcript = run_menu(library_world.library, ["3", "M001", "123", "0"])
+    assert transcript[4] == "ERROR [InvalidISBNError]: ISBN must be exactly 13 digits."
+
+
+def test_option_3_reference_item_is_r1(library_world):
+    transcript = run_menu(library_world.library, ["3", "M001", REFERENCE_ISBN, "0"])
+    assert transcript[4].startswith("ERROR [R1]:")
+
+
+def test_option_3_unavailable_then_yes_joins_the_waiting_list(library_world):
+    transcript = run_menu(library_world.library, ["3", "M001", ALCHEMIST_ISBN, "y", "0"])
+    assert transcript[4:6] == [
+        "No copies of 'The Alchemist' are available. "
+        "Join the waiting list? (y/n): y",
+        "OK: Asha Raman is #1 on the waiting list for 'The Alchemist'.",
+    ]
+
+
+def test_option_3_unavailable_then_no_prints_nothing_more(library_world):
+    transcript = run_menu(library_world.library, ["3", "M001", ALCHEMIST_ISBN, "n", "0"])
+    assert transcript[4:] == [
+        "No copies of 'The Alchemist' are available. "
+        "Join the waiting list? (y/n): n",
+        "> 0",
+    ]
+
+
+def test_option_3_any_answer_but_y_means_no(library_world):
+    transcript = run_menu(library_world.library, ["3", "M001", ALCHEMIST_ISBN, "maybe", "0"])
+    assert transcript[-1] == "> 0"
+    assert transcript[-2].endswith("maybe")  # no OK line in between
+
+
+def test_option_3_capital_y_and_spaces_still_mean_yes(library_world):
+    transcript = run_menu(library_world.library, ["3", "M001", ALCHEMIST_ISBN, " Y ", "0"])
+    assert transcript[5].startswith("OK: Asha Raman is #1")
+
+
+# --- Option 4: return ---------------------------------------------------------------
+
+
+def test_option_4_returns_a_late_loan_with_its_fine(library_world):
+    transcript = run_menu(library_world.library, ["4", "L001", "0"])
+    assert transcript[1:] == [
+        "> 4",
+        "Loan ID: L001",
+        "OK: Rahul Mehta returned 'The Alchemist'. Late by 20 days. Fine: ₹100.",
+        "> 0",
+    ]
+
+
+def test_option_4_names_the_next_member_on_the_waiting_list(library_world):
+    transcript = run_menu(
+        library_world.library,
+        ["6", "M001", ALCHEMIST_ISBN, "4", "L001", "0"],
+    )
+    assert transcript[-2].endswith(
+        "Fine: ₹100.\nNext on waiting list: Asha Raman."
+    )
+
+
+def test_option_4_the_same_loan_twice_is_an_error(library_world):
+    transcript = run_menu(library_world.library, ["4", "L001", "4", "L001", "0"])
+    assert transcript[-2].startswith("ERROR [LoanAlreadyReturnedError]: Loan L001")
+
+
+def test_option_4_unknown_loan(library_world):
+    transcript = run_menu(library_world.library, ["4", "L999", "0"])
+    assert transcript[3] == "ERROR [LoanNotFoundError]: No loan with ID L999."
+
+
+# --- Option 5: renew ----------------------------------------------------------------
+
+
+def _borrow(library_world, member_id, isbn):
+    return library_world.library.borrow(member_id, isbn, TODAY)
+
+
+def test_option_5_renews_a_book(library_world):
+    loan = _borrow(library_world, "M001", WINGS_ISBN)
+    transcript = run_menu(library_world.library, ["5", loan.loan_id, "0"])
+    assert transcript[3] == (
+        "OK: Renewed 'Wings of Fire' (renewal 1 of 2). New due date 2026-11-09."
+    )
+
+
+def test_option_5_magazines_cannot_be_renewed(library_world):
+    loan = _borrow(library_world, "M001", MAGAZINE_ISBN)
+    transcript = run_menu(library_world.library, ["5", loan.loan_id, "0"])
+    assert transcript[3] == "ERROR [R2]: Magazines cannot be renewed."
+
+
+def test_option_5_unknown_loan(library_world):
+    transcript = run_menu(library_world.library, ["5", "L999", "0"])
+    assert transcript[3] == "ERROR [LoanNotFoundError]: No loan with ID L999."
+
+
+# --- Option 6: join the waiting list ---------------------------------------------------
+
+
+def test_option_6_joins_the_waiting_list(library_world):
+    transcript = run_menu(library_world.library, ["6", "M001", ALCHEMIST_ISBN, "0"])
+    assert transcript[1:] == [
+        "> 6",
+        "Member ID: M001",
+        "ISBN: " + ALCHEMIST_ISBN,
+        "OK: Asha Raman is #1 on the waiting list for 'The Alchemist'.",
+        "> 0",
+    ]
+
+
+def test_option_6_second_member_is_number_two(library_world):
+    transcript = run_menu(
+        library_world.library,
+        ["6", "M001", ALCHEMIST_ISBN, "6", "M003", ALCHEMIST_ISBN, "0"],
+    )
+    assert transcript[-2].endswith("is #2 on the waiting list for 'The Alchemist'.")
+
+
+def test_option_6_the_same_member_twice_is_an_error(library_world):
+    transcript = run_menu(
+        library_world.library,
+        ["6", "M001", ALCHEMIST_ISBN, "6", "M001", ALCHEMIST_ISBN, "0"],
+    )
+    assert "already on the waiting list" in transcript[-2]
+
+
+def test_option_6_when_a_copy_is_free_says_to_borrow(library_world):
+    transcript = run_menu(library_world.library, ["6", "M001", WINGS_ISBN, "0"])
+    assert "Borrow it instead." in transcript[4]
+
+
+def test_option_6_unknown_member_is_reported_before_the_isbn(library_world):
+    transcript = run_menu(library_world.library, ["6", "M999", "0"])
+    assert transcript[3] == "ERROR [MemberNotFoundError]: No member with ID M999."
+
+
+# --- Options 7 and 8: reports ------------------------------------------------------------
+
+
+def test_option_7_member_loans_matches_the_brief(library_world):
+    transcript = run_menu(library_world.library, ["7", "M002", "0"])
+    assert transcript[1:] == [
+        "> 7",
+        "Member ID: M002",
+        "Loans for Rahul Mehta (Regular: 5 items, 21 days, ₹5/day)\n"
+        "LOAN  TITLE          ISSUED      DUE         STATUS\n"
+        "L001  The Alchemist  2026-09-01  2026-09-22  OVERDUE (20 days)\n"
+        "Active loans: 1 of 5\n"
+        "Unpaid fines: ₹0",
+        "> 0",
+    ]
+
+
+def test_option_7_unknown_member(library_world):
+    transcript = run_menu(library_world.library, ["7", "M999", "0"])
+    assert transcript[3] == "ERROR [MemberNotFoundError]: No member with ID M999."
+
+
+def test_option_8_overdue_report_matches_the_brief(library_world):
+    transcript = run_menu(library_world.library, ["8", "0"])
+    assert transcript[1:] == [
+        "> 8",
+        "Overdue loans as of 2026-10-12\n"
+        "LOAN  MEMBER       TITLE                DUE         DAYS  FINE SO FAR\n"
+        "L001  Rahul Mehta  The Alchemist        2026-09-22    20  ₹100\n"
+        "L002  Karthik N    Python Crash Course  2026-10-05     7  ₹14\n"
+        "Total overdue: 2   Fines so far: ₹114",
         "> 0",
     ]
 
@@ -167,6 +355,24 @@ def test_end_of_input_or_ctrl_c_ends_cleanly(library_world, exit_error):
 
     Menu(library_world.library, TODAY, input_that_ends, output.append).run()
     assert output == [MENU_TEXT]  # printed once, then a clean exit
+
+
+@pytest.mark.parametrize(
+    "answers",
+    [["3"], ["3", "M001"], ["3", "M001", ALCHEMIST_ISBN], ["4"], ["5"], ["6", "M001"], ["7"]],
+)
+def test_end_of_input_in_the_middle_of_any_flow_ends_cleanly(library_world, answers):
+    output = []
+    remaining = iter(answers)
+
+    def input_that_ends(prompt):
+        try:
+            return next(remaining)
+        except StopIteration:
+            raise EOFError from None
+
+    Menu(library_world.library, TODAY, input_that_ends, output.append).run()
+    assert output[0] == MENU_TEXT
 
 
 def test_end_of_input_in_the_middle_of_an_action_ends_cleanly(library_world):

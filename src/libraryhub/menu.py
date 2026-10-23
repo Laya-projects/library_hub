@@ -7,11 +7,19 @@ script the whole conversation.
 
 from __future__ import annotations
 
-from functools import partial
 from typing import TYPE_CHECKING
 
-from libraryhub.errors import LibraryError
-from libraryhub.formatters import format_catalogue, format_search_results
+from libraryhub.errors import ItemNotAvailableError, LibraryError
+from libraryhub.formatters import (
+    format_borrowed,
+    format_catalogue,
+    format_member_loans,
+    format_overdue_report,
+    format_renewed,
+    format_returned,
+    format_search_results,
+    format_waiting_joined,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -19,6 +27,7 @@ if TYPE_CHECKING:
 
     from libraryhub.items import LibraryItem
     from libraryhub.library import Library
+    from libraryhub.members import Member
 
 MENU_TEXT = """=== LibraryHub Mini ===
 1. List catalogue
@@ -33,6 +42,7 @@ MENU_TEXT = """=== LibraryHub Mini ===
 
 PROMPT = "> "
 INVALID_CHOICE = "Please enter a number from 0 to 8."
+JOIN_QUESTION = "Join the waiting list? (y/n): "
 
 
 class Menu:
@@ -52,12 +62,12 @@ class Menu:
         self._actions: dict[str, Callable[[], None]] = {
             "1": self._list_catalogue,
             "2": self._search,
-            "3": partial(self._not_built, "3"),
-            "4": partial(self._not_built, "4"),
-            "5": partial(self._not_built, "5"),
-            "6": partial(self._not_built, "6"),
-            "7": partial(self._not_built, "7"),
-            "8": partial(self._not_built, "8"),
+            "3": self._borrow,
+            "4": self._return_item,
+            "5": self._renew,
+            "6": self._join_waiting_list,
+            "7": self._member_loans,
+            "8": self._overdue_report,
             "0": self._exit,
         }
 
@@ -89,19 +99,22 @@ class Menu:
         except LibraryError as error:
             self._output(error.formatted())  # the only place that shows an error
 
-    # --- Actions ----------------------------------------------------------------
+    # --- Small helpers ------------------------------------------------------------
 
-    def _exit(self) -> None:
-        self._running = False
+    def _ask_member(self) -> Member:
+        """Ask for a member ID and look the member up straight away.
 
-    def _not_built(self, choice: str) -> None:
-        self._output(f"Option {choice} is not built yet.")
+        An unknown member is reported before the ISBN or loan is ever asked.
+        """
+        return self._library.get_member(self._ask("Member ID: "))
 
     def _with_availability(
         self, items: list[LibraryItem]
     ) -> list[tuple[LibraryItem, int]]:
         """Pair each item with the copies available now, for the formatters."""
         return [(item, self._library.available_copies(item.isbn)) for item in items]
+
+    # --- Options 1 and 2: browsing --------------------------------------------------
 
     def _list_catalogue(self) -> None:
         entries = self._with_availability(self._library.list_items())
@@ -111,3 +124,57 @@ class Menu:
         text = self._ask("Search: ")
         entries = self._with_availability(self._library.search_items(text))
         self._output(format_search_results(text, entries))
+
+    # --- Option 3: borrow, with the waiting-list question ------------------------------
+
+    def _borrow(self) -> None:
+        member = self._ask_member()
+        isbn = self._ask("ISBN: ")
+        try:
+            loan = self._library.borrow(member.member_id, isbn, self._today)
+        except ItemNotAvailableError as error:
+            # The message and the question share one line, as in the brief.
+            answer = self._ask(f"{error.message} {JOIN_QUESTION}")
+            if answer.lower() == "y":  # anything else means no, and prints nothing
+                self._reserve(member, isbn)
+            return
+        item = self._library.get_item(isbn)
+        self._output(format_borrowed(member, item, loan))
+
+    def _reserve(self, member: Member, isbn: str) -> None:
+        position = self._library.reserve(member.member_id, isbn)
+        item = self._library.get_item(isbn)
+        self._output(format_waiting_joined(member, item, position))
+
+    # --- Options 4 to 6: return, renew, join the waiting list -----------------------------
+
+    def _return_item(self) -> None:
+        loan_id = self._ask("Loan ID: ")
+        result = self._library.return_item(loan_id, self._today)
+        self._output(format_returned(result))
+
+    def _renew(self) -> None:
+        loan_id = self._ask("Loan ID: ")
+        result = self._library.renew(loan_id, self._today)
+        self._output(format_renewed(result))
+
+    def _join_waiting_list(self) -> None:
+        member = self._ask_member()
+        isbn = self._ask("ISBN: ")
+        self._reserve(member, isbn)
+
+    # --- Options 7 and 8: reports ---------------------------------------------------------
+
+    def _member_loans(self) -> None:
+        member_id = self._ask("Member ID: ")
+        report = self._library.member_loans(member_id, self._today)
+        self._output(format_member_loans(report))
+
+    def _overdue_report(self) -> None:
+        report = self._library.overdue_report(self._today)
+        self._output(format_overdue_report(report, self._today))
+
+    # --- Option 0 -----------------------------------------------------------------------
+
+    def _exit(self) -> None:
+        self._running = False

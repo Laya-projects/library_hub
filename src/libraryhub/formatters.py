@@ -13,7 +13,14 @@ if TYPE_CHECKING:
     from datetime import date
 
     from libraryhub.items import LibraryItem
-    from libraryhub.library import MemberLoans, OverdueLine
+    from libraryhub.library import (
+        MemberLoans,
+        OverdueLine,
+        RenewResult,
+        ReturnResult,
+    )
+    from libraryhub.loans import Loan
+    from libraryhub.members import Member
 
 COLUMN_GAP = "  "  # two spaces between columns, as in every sample
 
@@ -152,3 +159,43 @@ def format_overdue_report(lines: Sequence[OverdueLine], today: date) -> str:
         right_aligned=["DAYS"],
     )
     return f"{header}\n{table}\n{footer}"
+
+
+# --- The one-sentence answers to borrow, return, renew and reserve ------------
+
+
+def format_borrowed(member: Member, item: LibraryItem, loan: Loan) -> str:
+    """OK: Asha Raman borrowed 'Wings of Fire'. Due 2026-10-26."""
+    return (
+        f"OK: {member.name} borrowed '{item.title}'. "
+        f"Due {loan.due_date.isoformat()}."
+    )
+
+
+def format_returned(result: ReturnResult) -> str:
+    """The return message, plus who is next in line when someone is waiting."""
+    if result.days_late == 0:
+        lateness = "Returned on time."
+    else:
+        lateness = f"Late by {format_days(result.days_late)}."
+    text = (
+        f"OK: {result.member.name} returned '{result.item.title}'. "
+        f"{lateness} Fine: {format_money(result.fine)}."
+    )
+    if result.next_waiting is not None:
+        text += f"\nNext on waiting list: {result.next_waiting.name}."
+    return text
+
+
+def format_renewed(result: RenewResult) -> str:
+    """OK: Renewed 'Sapiens' (renewal 1 of 2). New due date 2026-11-19."""
+    return (
+        f"OK: Renewed '{result.item.title}' "
+        f"(renewal {result.renewal_number} of {result.max_renewals}). "
+        f"New due date {result.new_due_date.isoformat()}."
+    )
+
+
+def format_waiting_joined(member: Member, item: LibraryItem, position: int) -> str:
+    """OK: Sneha Iyer is #1 on the waiting list for 'The Alchemist'."""
+    return f"OK: {member.name} is #{position} on the waiting list for '{item.title}'."
