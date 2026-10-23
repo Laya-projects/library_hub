@@ -151,3 +151,13 @@ def test_audit_decorator_raises_if_audit_log_is_missing():
     with pytest.raises(AttributeError):
         srv.borrow("M001", "9780000000011")
 
+def test_audit_rejects_a_result_it_cannot_read():
+    class Fake:
+        audit_log = AuditLog()
+
+        @audit("odd")
+        def do_something(self):
+            return 42  # has no loan, member_id or isbn
+
+    with pytest.raises(TypeError, match="Cannot extract member_id and isbn"):
+        Fake().do_something()

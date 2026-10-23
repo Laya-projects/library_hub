@@ -1,3 +1,4 @@
+import runpy
 from datetime import date
 
 import pytest
@@ -42,3 +43,11 @@ def test_main_runs_the_menu_and_exits_on_zero(monkeypatch, capsys, tmp_path):
     out = capsys.readouterr().out
     assert "today is 2026-10-12" in out
     assert "=== LibraryHub Mini ===" in out
+
+def test_running_the_module_as_a_script_exits_with_zero(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)  # the log file lands here
+    monkeypatch.setenv("TODAY", "2026-10-12")
+    monkeypatch.setattr("builtins.input", lambda prompt: "0")
+    with pytest.raises(SystemExit) as exit_info:
+        runpy.run_module("libraryhub.main", run_name="__main__")
+    assert exit_info.value.code == 0

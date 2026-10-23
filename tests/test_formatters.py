@@ -2,10 +2,10 @@ from datetime import date
 from types import SimpleNamespace
 
 from libraryhub.formatters import (
+    format_borrowed,
     format_catalogue,
     format_days,
     format_member_loans,
-    format_borrowed,
     format_money,
     format_overdue_report,
     format_renewed,
