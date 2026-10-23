@@ -155,6 +155,23 @@ class Library:
     def list_items(self) -> list[LibraryItem]:
         return self._items.list_all()
 
+    def search_items(self, text: str) -> list[LibraryItem]:
+        """Items whose title or any author contains `text`, ignoring case.
+
+        Results keep catalogue order and include reference items. A blank search
+        raises ValidationError: "" is inside every title, so it would quietly
+        return the whole catalogue.
+        """
+        needle = text.strip().casefold()
+        if not needle:
+            raise ValidationError("query", "Search text cannot be blank.")
+        return [
+            item
+            for item in self._items.list_all()
+            if needle in item.title.casefold()
+            or any(needle in author.casefold() for author in item.authors)
+        ]
+
     # --- Questions the rules are built on -------------------------------------
 
     def available_copies(self, isbn: str) -> int:
@@ -383,4 +400,4 @@ class Library:
 
     def unpaid_fines_report(self) -> list[UnpaidFineLine]:
         """Alias for members_with_unpaid_fines."""
-        return self.members_with_unpaid_fines()
+        return self.members_with_unpaid_fines()

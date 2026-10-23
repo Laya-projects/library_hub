@@ -1,6 +1,6 @@
 # DECISIONS.md
 
-Decision log for LibraryHub Mini. Each entry gives the problem, the options, the choice and the reason. A longer version with more detail is kept in `DECISIONS_detailed.md`.
+Decision log for LibraryHub Mini. Each entry gives the problem, the options, the choice and the reason. A longer version with more detail, up to D7, is kept in `DECISIONS_detailed.md`.
 
 ## Phase 1 at a glance
 
@@ -15,6 +15,8 @@ Decision log for LibraryHub Mini. Each entry gives the problem, the options, the
 | D7 | How do repositories and the loader work? | `get` returns `None`, loader checks everything first |
 | D8 | How is the audit trail recorded and timed? | `@audit` decorator, injectable clock on `AuditLog` |
 | D9 | How are edge cases formatted in reports and search? | Singular '1 day', comma authors, explicit empty messages |
+| D10 | How does `Library` apply the rules? | Check list, results as data, free copies held for the queue |
+| D11 | How does the menu work, and what does a blank search do? | Menu printed once, dictionary dispatch, blank search is an error |
 
 ## Phase 1: Python + OOP
 
@@ -72,6 +74,7 @@ Decision log for LibraryHub Mini. Each entry gives the problem, the options, the
   - `get` returns `None` when nothing is found, and `Library` raises the right error. A repository only stores things. (Rejected: raising inside the repository.)
   - The interfaces use `ABC`, so a missing method is caught at creation. (Rejected: `Protocol`.)
   - A repeated ISBN (R9), member ID, loan ID, or a second fine for one loan raises `ValidationError`. A new `DuplicateISBNError` was rejected as an extra error class.
+  - Loans have `update(loan)`: `Library` calls it after every change (return date, renewals, due date). In memory the object is shared so it looks unnecessary, but a database repository only sees a change through this call. A test uses a repository that hands out copies to prove `Library` calls it. Updating an unknown loan raises `LoanNotFoundError`.
   - Collections: a `dict` by ISBN and by member ID, and `list`s for loans and fines. `list_all()` returns a copy of the collection, and the objects inside are shared so `Library` can update them.
   - The loader picks the class with dictionary lookups (no if-chain), requires `YYYY-MM-DD` dates, reads with `utf-8-sig` (Excel's invisible BOM), and names the file and line for a bad row.
   - The loader reads and checks all four files first (unique IDs, every loan and fine points at something real), and only then stores. A broken or missing file raises `ValidationError` and stores nothing.
@@ -106,6 +109,58 @@ Decision log for LibraryHub Mini. Each entry gives the problem, the options, the
   - **Options:** A) an empty table with naked column headers. B) clear explicit message (`No active loans.` / `No overdue loans.`).
   - **Chosen: B.**
   - **Why:** naked table headers with no rows look broken and confusing. An explicit message gives immediate clarity while preserving the surrounding header and summary counters.
+
+### D10. How does `Library` apply the rules? (R1 to R10)
+- **Problem:** `Library` is the only place where the rules are applied, and the menu and the Phase 4 API both call it. Several rule gaps had to be settled.
+- **Structure (not a choice between options):**
+  - `borrow` runs a list of small checks in the brief's order (R1, R4, R3, R8, availability). The first broken rule raises, and moving a rule is a one-line change.
+  - Methods return data (`ReturnResult`, `RenewResult`, `MemberLoans`, `OverdueLine`) or raise a `LibraryError`. They never print, never open files and never read the clock.
+  - A `Fine` is stored on return only when the amount is above zero, which matches the starter data (no ₹0 rows).
+  - Two errors were added: `LoanNotFoundError` and `LoanAlreadyReturnedError`. The second also stops renewing a returned loan.
+  - `return_item` and `renew` call `update(loan)` after changing a loan (see D7).
+- **Q1. A copy is free but people are waiting. May someone who isn't first borrow it?**
+  - Options: A) no, the copy is held for the queue. B) yes, anyone may take it.
+  - **Chosen: A.** The brief says the first person is "served first".
+  - How: a member's place is their position in the queue, or one behind the whole queue if they are not in it. They can borrow only if the free copies are at least their place. A spare copy beyond the queue is open to anyone.
+  - Cost: the refused member sees "No copies of ... are available", which is slightly loose.
+- **Q2. When may someone join the waiting list?**
+  - Options: A) refuse three cases. B) allow joining at any time.
+  - **Chosen: A.** Refused: a copy is already available to them (a `ValidationError` saying to borrow it), they are already queued (`ValidationError`), or they already hold the title (the R8 error). Reference items can't be waited for (R1).
+  - Why: the list stays free of people who could borrow now, and nobody appears twice.
+- **Q3. A loan at the renewal limit with someone waiting: which message?**
+  - Options: A) the limit message. B) the waiting message.
+  - **Chosen: A.** The limit is permanent, whereas "someone is waiting" is temporary, so it would hint that renewing might work later.
+  - Check order for `renew`: R2, then the R6 limit, then R6 waiting.
+- **Q4. Does `renew` keep a `today` parameter?**
+  - Options: A) keep it. B) drop it, because no rule in `renew` depends on the date.
+  - **Chosen: A.** `borrow`, `return_item` and `renew` are all called the same way, which keeps the menu and the API simple. The docstring says that `today` is unused: the new due date is the old due date plus the member's loan period (R6).
+  - Cost: an argument that does nothing today, and a linter may flag it.
+- **Known limits:**
+  - The waiting list is a plain `list` of member IDs per ISBN, kept inside `Library`. It is lost when the program closes. Phase 2 swaps it for a `deque` and measures the difference, and Phase 3 moves it behind a repository (the `reservations` table).
+  - A free copy is held for the queue, but the refused member still sees "No copies of ... are available". The brief gives only that one message, so it is kept.
+  - If the first person in the queue cannot borrow (for example new fines above ₹100), the copy stays held for them. Nothing removes a blocked member from the queue.
+  - The R2 check uses `max_renewals() == 0`, so it never asks what type an item is. For a reference item it would also say "Magazines cannot be renewed", but a reference item can never be on loan, so it is unreachable.
+
+### D11. How does the menu work, and what does a blank search do?
+- **Problem:** the menu reads input and prints, but every rule must stay in `Library`. Three small questions came up.
+- **Q1. What does a blank search do?**
+  - Options: A) raise a `ValidationError`. B) return no results.
+  - **Chosen: A.** `Library.search_items` raises `ValidationError("query", "Search text cannot be blank.")`, and the menu prints `ERROR [ValidationError]: Search text cannot be blank.`
+  - Why: an empty text is inside every title, so a blank search would quietly return the whole catalogue. "No results" would print `No items match ''.`, which looks like a bug. It also matches D5, where bad values raise one error family. The search rule lives in `Library`, not the menu, because the Phase 4 API will use it too.
+- **Q2. Is the menu printed once or after every action?**
+  - Options: A) print it once at start-up. B) print it again after every action.
+  - **Chosen: A.** The brief's samples show `> abc`, the error, and then `> ` again with no menu in between, and Session A shows the prompts following each other directly.
+  - Why: it matches the samples character for character, which Step 9's golden tests will compare.
+- **Q3. How is a choice turned into an action?**
+  - Options: A) a dictionary from `"0"` to `"8"` to methods. B) an `if`/`elif` chain.
+  - **Chosen: A.** Adding an option is one new line, and an invalid choice is simply a missing key. It is the same lookup pattern as the CSV loader.
+- **Details:**
+  - `_ask(prompt)` is the only place that reads input, so stripping happens once.
+  - `_handle` is the only place that shows an error, with `error.formatted()`.
+  - Input and output are injected (`input_fn`, `output_fn`), so a test can script a whole conversation, and the transcript records `prompt + answer` like a real terminal.
+  - End of input (Ctrl+Z) and Ctrl+C leave the loop quietly, with no message, like option 0.
+  - `MENU_TEXT` starts at the `===` line. The blank line before it in the brief's sample belongs to `main.py`.
+  - Options 3 to 8 print "not built yet" until the later steps.
 
 ## Phase 2: DSA
 

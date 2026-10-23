@@ -3,13 +3,10 @@ import inspect
 import logging
 import re
 from datetime import date, datetime
-from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
 from libraryhub import library as library_module
-from libraryhub.csv_loader import load_data
 from libraryhub.errors import (
     BorrowLimitExceededError,
     DuplicateLoanError,
@@ -26,14 +23,8 @@ from libraryhub.errors import (
 )
 from libraryhub.library import Library
 from libraryhub.loans import Fine, Loan
-from libraryhub.repositories import (
-    InMemoryFineRepository,
-    InMemoryItemRepository,
-    InMemoryLoanRepository,
-    InMemoryMemberRepository,
-)
+from libraryhub.repositories import InMemoryLoanRepository
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 TODAY = date(2026, 10, 12)
 
 WINGS = "9780000000011"
@@ -68,30 +59,6 @@ class CopyingLoanRepository(InMemoryLoanRepository):
 
     def list_for_isbn(self, isbn):
         return [copy.copy(loan) for loan in super().list_for_isbn(isbn)]
-
-
-def build_world(loans=None):
-    """A fresh Library built from the real data/ folder."""
-    Loan.reset_numbering()
-    items = InMemoryItemRepository()
-    members = InMemoryMemberRepository()
-    loans = InMemoryLoanRepository() if loans is None else loans
-    fines = InMemoryFineRepository()
-    load_data(DATA_DIR, items, members, loans, fines)
-    return SimpleNamespace(
-        library=Library(items, members, loans, fines),
-        loans=loans,
-        fines=fines,
-    )
-
-
-@pytest.fixture
-def world():
-    """A fresh world for every test."""
-    return build_world()
-
-
-# --- Session A, one test per step, each with its own starting state ----------
 
 
 def test_a1_asha_borrows_wings_of_fire(world):
@@ -469,22 +436,22 @@ def test_list_items_returns_all_seven(world):
 # --- Changes reach the repository through update() ---------------------------------
 
 
-def test_a_return_is_saved_even_when_the_repository_hands_out_copies():
-    world = build_world(CopyingLoanRepository())
+def test_a_return_is_saved_even_when_the_repository_hands_out_copies(make_world):
+    world = make_world(CopyingLoanRepository())
     world.library.return_item("L001", TODAY)
     assert world.loans.get("L001").return_date == TODAY
     assert world.library.available_copies(ALCHEMIST) == 1
 
 
-def test_a_renewal_is_saved_even_when_the_repository_hands_out_copies():
-    world = build_world(CopyingLoanRepository())
+def test_a_renewal_is_saved_even_when_the_repository_hands_out_copies(make_world):
+    world = make_world(CopyingLoanRepository())
     world.library.renew("L003", TODAY)
     saved = world.loans.get("L003")
     assert (saved.due_date, saved.renewals) == (date(2026, 11, 19), 1)
 
 
-def test_a_new_loan_is_stored_by_borrow():
-    world = build_world(CopyingLoanRepository())
+def test_a_new_loan_is_stored_by_borrow(make_world):
+    world = make_world(CopyingLoanRepository())
     loan = world.library.borrow(ASHA, WINGS, TODAY)
     assert world.loans.get(loan.loan_id).member_id == ASHA
 
@@ -729,4 +696,47 @@ def test_unexpected_bug_propagates_unlabelled_without_warning_log(world, caplog)
         world.library.borrow(ASHA, WINGS, TODAY)
 
     assert not any("Borrow refused" in rec.getMessage() for rec in caplog.records)
-
+
+
+# --- Step 8.2: searching the catalogue -----------------------------------------
+
+
+@pytest.mark.parametrize("text", ["paulo", "PAULO", "Paulo", "  paulo  "])
+def test_search_finds_the_alchemist_whatever_the_case(world, text):
+    titles = [item.title for item in world.library.search_items(text)]
+    assert titles == ["The Alchemist"]
+
+
+def test_search_matches_the_second_author(world):
+    titles = [item.title for item in world.library.search_items("tiwari")]
+    assert titles == ["Wings of Fire"]
+
+
+def test_search_includes_reference_items_in_catalogue_order(world):
+    titles = [item.title for item in world.library.search_items("various")]
+    assert titles == ["Encyclopaedia of Science", "India Today (Oct 2026)"]
+
+
+def test_search_matches_a_piece_of_the_title(world):
+    titles = [item.title for item in world.library.search_items("crash")]
+    assert titles == ["Python Crash Course"]
+
+
+def test_search_with_no_match_returns_an_empty_list(world):
+    assert world.library.search_items("zzz") == []
+
+
+def test_search_results_keep_catalogue_order(world):
+    isbns = [item.isbn for item in world.library.search_items("a")]
+    catalogue = [item.isbn for item in world.library.list_items()]
+    assert isbns == [isbn for isbn in catalogue if isbn in isbns]
+    assert len(isbns) > 2
+
+
+@pytest.mark.parametrize("blank", ["", "   ", "\t"])
+def test_a_blank_search_is_refused(world, blank):
+    with pytest.raises(ValidationError) as caught:
+        world.library.search_items(blank)
+    assert caught.value.formatted() == (
+        "ERROR [ValidationError]: Search text cannot be blank."
+    )

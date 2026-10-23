@@ -1,10 +1,5 @@
 from datetime import date
-from pathlib import Path
-from types import SimpleNamespace
 
-import pytest
-
-from libraryhub.csv_loader import load_data
 from libraryhub.formatters import (
     format_catalogue,
     format_days,
@@ -15,35 +10,11 @@ from libraryhub.formatters import (
     format_table,
 )
 from libraryhub.items import Book
-from libraryhub.library import Library, LoanLine, MemberLoans
+from libraryhub.library import LoanLine, MemberLoans
 from libraryhub.loans import Loan
 from libraryhub.members import RegularMember, StudentMember
-from libraryhub.repositories import (
-    InMemoryFineRepository,
-    InMemoryItemRepository,
-    InMemoryLoanRepository,
-    InMemoryMemberRepository,
-)
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 TODAY = date(2026, 10, 12)
-
-
-@pytest.fixture
-def library_world():
-    Loan.reset_numbering()
-    items = InMemoryItemRepository()
-    members = InMemoryMemberRepository()
-    loans = InMemoryLoanRepository()
-    fines = InMemoryFineRepository()
-    load_data(DATA_DIR, items, members, loans, fines)
-    return SimpleNamespace(
-        library=Library(items, members, loans, fines),
-        items=items,
-        members=members,
-        loans=loans,
-        fines=fines,
-    )
 
 
 def _no_trailing_spaces(text: str) -> bool:
