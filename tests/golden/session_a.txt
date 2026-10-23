@@ -1,0 +1,39 @@
+(.venv) PS C:\Users\laya_r\OneDrive - LevelShift\library_hub> $env:TODAY="2026-10-12"; python -m libraryhub.main
+LibraryHub Mini - today is 2026-10-12
+=== LibraryHub Mini ===
+1. List catalogue
+2. Search by title or author
+3. Borrow
+4. Return
+5. Renew
+6. Join waiting list
+7. Member loans
+8. Overdue report
+0. Exit
+> 1
+ISBN           TITLE                     TYPE       AVAILABLE
+9780000000011  Wings of Fire             Book       2 of 2
+9780000000028  The Alchemist             Book       0 of 1
+9780000000035  Clean Code                Book       1 of 1
+9780000000042  Python Crash Course       Book       1 of 2
+9780000000059  Sapiens                   Book       0 of 1
+9780000000066  Encyclopaedia of Science  Reference  not borrowable
+9780000000073  India Today (Oct 2026)    Magazine   3 of 3
+> 3
+Member ID: M001
+ISBN: 9780000000011
+OK: Asha Raman borrowed 'Wings of Fire'. Due 2026-10-26.
+> 7
+Member ID: M002
+Loans for Rahul Mehta (Regular: 5 items, 21 days, ₹5/day)
+LOAN  TITLE          ISSUED      DUE         STATUS
+L001  The Alchemist  2026-09-01  2026-09-22  OVERDUE (20 days)
+Active loans: 1 of 5
+Unpaid fines: ₹0
+> 8
+Overdue loans as of 2026-10-12
+LOAN  MEMBER       TITLE                DUE         DAYS  FINE SO FAR       
+L001  Rahul Mehta  The Alchemist        2026-09-22    20  ₹100
+L002  Karthik N    Python Crash Course  2026-10-05     7  ₹14
+Total overdue: 2   Fines so far: ₹114
+> 0
