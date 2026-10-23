@@ -14,6 +14,7 @@ Decision log for LibraryHub Mini. Each entry gives the problem, the options, the
 | D6 | Where does the date and money maths live? | Plain functions in `calculations.py` |
 | D7 | How do repositories and the loader work? | `get` returns `None`, loader checks everything first |
 | D8 | How is the audit trail recorded and timed? | `@audit` decorator, injectable clock on `AuditLog` |
+| D9 | How are edge cases formatted in reports and search? | Singular '1 day', comma authors, explicit empty messages |
 
 ## Phase 1: Python + OOP
 
@@ -90,6 +91,21 @@ Decision log for LibraryHub Mini. Each entry gives the problem, the options, the
   - An `@audit` decorator separates auditing (a cross-cutting concern) from business logic. Methods focus purely on Rulebook enforcement and state transitions. If a method raises an exception when a rule is broken, the decorator naturally skips recording without error-handling boilerplate.
   - Keeping the clock on `AuditLog` (and injectable via `Library.__init__` or test properties) honors the architecture rule that `Library` never reads the system clock itself. Tests can pass or assign a fixed clock callable to verify audit timestamps deterministically. Scoping `AuditLog` to the `Library` instance prevents test state leakage.
 - **Known, for Phase 3:** the audit entry is recorded after the action has happened. If `record` or `_extract_audit_targets` raised, the loan would already be stored but the caller would get an exception. That is a programmer-error case, so it is fine for now; Phase 3's database transactions will fix it properly.
+
+### D9. How are edge cases formatted in reports and search?
+- **Problem:** three display formatting questions for search results, member loans, and overdue reports needed decisions.
+- **1. OVERDUE (1 days) vs OVERDUE (1 day):**
+  - **Options:** A) always plural `"OVERDUE (1 days)"`. B) grammatical singular `"OVERDUE (1 day)"` and plural for others.
+  - **Chosen: B.**
+  - **Why:** "1 days" is an unpolished pluralization bug. Clean singular/plural logic gives the console UI a professional feel.
+- **2. Multiple authors in search results:**
+  - **Options:** A) semicolon `; ` matching CSV storage. B) comma `, `.
+  - **Chosen: B.**
+  - **Why:** semicolon is a storage delimiter in CSV files, whereas comma `, ` is natural English punctuation for reader-facing displays.
+- **3. Empty member loans or overdue reports:**
+  - **Options:** A) an empty table with naked column headers. B) clear explicit message (`No active loans.` / `No overdue loans.`).
+  - **Chosen: B.**
+  - **Why:** naked table headers with no rows look broken and confusing. An explicit message gives immediate clarity while preserving the surrounding header and summary counters.
 
 ## Phase 2: DSA
 
