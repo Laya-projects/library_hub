@@ -2,6 +2,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+
 from libraryhub.calculations import unpaid_total
 from libraryhub.csv_loader import (
     ITEM_CLASSES,
@@ -382,7 +383,7 @@ def test_a_broken_file_leaves_every_repository_empty(tmp_path):
 
 def test_file_saved_with_a_bom_is_read(tmp_path):
     path = tmp_path / "fines.csv"
-    path.write_bytes(b"\xef\xbb\xbf" + "loan_id,amount,paid\nL005,10,yes\n".encode())
+    path.write_bytes(b"\xef\xbb\xbf" + b"loan_id,amount,paid\nL005,10,yes\n")
     (fine,) = load_fines(path)
     assert fine.loan_id == "L005"
 

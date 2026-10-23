@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from libraryhub.errors import ValidationError
+
 
 class Member(ABC):
     """A library member.
@@ -14,8 +16,18 @@ class Member(ABC):
 
     def __init__(self, member_id: str, name: str, email: str) -> None:
         self.member_id = member_id
-        self.name = name
-        self.email = email  # goes through the setter, so it is validated
+        self.name = name  # name and email go through their setters,
+        self.email = email  # so they are validated at creation
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @name.setter
+    def name(self, value: str) -> None:
+        if not value.strip():
+            raise ValidationError("name", "Name cannot be blank.")
+        self._name = value.strip()
 
     @property
     def email(self) -> str:
@@ -24,7 +36,7 @@ class Member(ABC):
     @email.setter
     def email(self, value: str) -> None:
         if "@" not in value:
-            raise ValueError("Email must contain '@'.")
+            raise ValidationError("email", "Email must contain '@'.")
         self._email = value
 
     @abstractmethod

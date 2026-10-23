@@ -1,4 +1,7 @@
+from datetime import date
+
 import pytest
+
 from libraryhub.errors import (
     BorrowLimitExceededError,
     DuplicateLoanError,
@@ -7,9 +10,12 @@ from libraryhub.errors import (
     ItemNotBorrowableError,
     ItemNotFoundError,
     LibraryError,
+    LoanAlreadyReturnedError,
+    LoanNotFoundError,
     MemberNotFoundError,
     RenewalNotAllowedError,
     UnpaidFinesError,
+    ValidationError,
 )
 
 # (error object, exact line the brief's samples print)
@@ -62,7 +68,12 @@ SAMPLES = [
     ),
 ]
 
-ALL_ERRORS = [error for error, _ in SAMPLES] + [ItemNotAvailableError("The Alchemist")]
+ALL_ERRORS = [error for error, _ in SAMPLES] + [
+    ItemNotAvailableError("The Alchemist"),
+    ValidationError("title", "Title cannot be blank."),
+    LoanNotFoundError("L999"),
+    LoanAlreadyReturnedError("L004", date(2026, 9, 24)),
+]
 
 
 def name_of(error):
@@ -104,7 +115,15 @@ def test_str_of_an_error_is_its_message(error):
 
 
 @pytest.mark.parametrize(
-    "error", [InvalidISBNError("1"), ItemNotFoundError("1"), MemberNotFoundError("M1")],
+    "error",
+    [
+        InvalidISBNError("1"),
+        ItemNotFoundError("1"),
+        MemberNotFoundError("M1"),
+        ValidationError("title", "Title cannot be blank."),
+        LoanNotFoundError("L999"),
+        LoanAlreadyReturnedError("L004", date(2026, 9, 24)),
+    ],
     ids=name_of,
 )
 def test_non_rule_errors_use_their_class_name_as_code(error):
@@ -152,3 +171,19 @@ def test_not_available_message_starts_the_waiting_list_prompt():
 )
 def test_limit_reached_message_uses_singular_or_plural(times, expected):
     assert RenewalNotAllowedError.limit_reached("Sapiens", times).message == expected
+
+
+def test_validation_error_line_and_field():
+    error = ValidationError("title", "Title cannot be blank.")
+    assert error.formatted() == "ERROR [ValidationError]: Title cannot be blank."
+    assert error.field == "title"
+
+
+def test_loan_errors_lines():
+    assert LoanNotFoundError("L999").formatted() == (
+        "ERROR [LoanNotFoundError]: No loan with ID L999."
+    )
+    assert LoanAlreadyReturnedError("L004", date(2026, 9, 24)).formatted() == (
+        "ERROR [LoanAlreadyReturnedError]: Loan L004 was already returned "
+        "on 2026-09-24."
+    )

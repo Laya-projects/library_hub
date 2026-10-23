@@ -1,4 +1,6 @@
 import pytest
+
+from libraryhub.errors import ValidationError
 from libraryhub.members import Member, PremiumMember, RegularMember, StudentMember
 
 # class, label, borrow limit, loan period in days, fine per day (the Rulebook table)
@@ -25,13 +27,31 @@ def test_member_cannot_be_created_directly():
 
 @pytest.mark.parametrize("bad_email", ["", "asha.example.com", "asha"])
 def test_email_without_at_is_rejected(bad_email):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         StudentMember("M001", "Asha Raman", bad_email)
+
+
+@pytest.mark.parametrize("blank_name", ["", "   ", "\t"])
+def test_blank_name_is_rejected(blank_name):
+    with pytest.raises(ValidationError):
+        StudentMember("M001", blank_name, "asha@example.com")
+
+
+def test_name_is_stripped():
+    member = StudentMember("M001", "  Asha Raman ", "asha@example.com")
+    assert member.name == "Asha Raman"
+
+
+def test_changing_to_a_blank_name_raises_and_keeps_the_old_value():
+    member = StudentMember("M001", "Asha Raman", "asha@example.com")
+    with pytest.raises(ValidationError):
+        member.name = " "
+    assert member.name == "Asha Raman"
 
 
 def test_changing_to_a_bad_email_raises_and_keeps_the_old_value():
     member = StudentMember("M001", "Asha Raman", "asha@example.com")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         member.email = "nope"
     assert member.email == "asha@example.com"
 

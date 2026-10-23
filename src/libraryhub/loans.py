@@ -6,6 +6,9 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar
 
+from libraryhub import calculations
+from libraryhub.errors import ValidationError
+
 if TYPE_CHECKING:
     from datetime import date
 
@@ -20,6 +23,10 @@ class Fine:
     loan_id: str
     amount: int  # whole rupees
     paid: bool = False
+
+    def __post_init__(self) -> None:
+        if self.amount < 0:
+            raise ValidationError("amount", "Fine amount cannot be negative.")
 
     def __str__(self) -> str:
         status = "paid" if self.paid else "unpaid"
@@ -44,6 +51,12 @@ class Loan:
         return_date: date | None = None,
         renewals: int = 0,
     ) -> None:
+        if due_date < issue_date:
+            raise ValidationError(
+                "due_date", "Due date cannot be before the issue date."
+            )
+        if renewals < 0:
+            raise ValidationError("renewals", "Renewals cannot be negative.")
         if loan_id is None:
             loan_id = Loan._take_next_id()
         else:
@@ -74,6 +87,14 @@ class Loan:
         """Start numbering from L001 again. Tests use this for a clean start."""
         cls._next_number = 1
 
+    def renew(self, member: Member) -> None:
+        """Push the due date out and count the renewal, always together (R6).
+
+        Whether a renewal is allowed at all is decided by the Library.
+        """
+        self.due_date = calculations.renewed_due_date(self.due_date, member)
+        self.renewals += 1
+
     def is_open(self) -> bool:
         """True while the item has not been returned."""
         return self.return_date is None
@@ -83,15 +104,16 @@ class Loan:
 
         Once the item is returned, lateness stops counting on the return date.
         """
-        last_day = today if self.return_date is None else self.return_date
-        return max(0, (last_day - self.due_date).days)
+        return calculations.days_late(self.due_date, today, self.return_date)
 
     def is_overdue(self, today: date) -> bool:
         return self.is_open() and self.days_late(today) > 0
 
     def fine(self, today: date, member: Member, item: LibraryItem) -> int:
         """R5: days late x the member's daily rate, never above the item's price."""
-        return min(self.days_late(today) * member.fine_per_day(), item.price)
+        return calculations.fine_amount(
+            self.days_late(today), member.fine_per_day(), item.price
+        )
 
     def __str__(self) -> str:
         state = "on loan" if self.is_open() else "returned"

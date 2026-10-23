@@ -7,6 +7,11 @@ wording of every error lives here and nowhere else.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from datetime import date
+
 
 class LibraryError(Exception):
     """Parent of every error the library raises."""
@@ -46,6 +51,36 @@ class MemberNotFoundError(LibraryError):
     def __init__(self, member_id: str) -> None:
         super().__init__("MemberNotFoundError", f"No member with ID {member_id}.")
         self.member_id = member_id
+
+
+class LoanNotFoundError(LibraryError):
+    def __init__(self, loan_id: str) -> None:
+        super().__init__("LoanNotFoundError", f"No loan with ID {loan_id}.")
+        self.loan_id = loan_id
+
+
+class LoanAlreadyReturnedError(LibraryError):
+    """The loan is closed, so it cannot be returned or renewed again."""
+
+    def __init__(self, loan_id: str, returned_on: date) -> None:
+        super().__init__(
+            "LoanAlreadyReturnedError",
+            f"Loan {loan_id} was already returned on {returned_on.isoformat()}.",
+        )
+        self.loan_id = loan_id
+        self.returned_on = returned_on
+
+
+class ValidationError(LibraryError):
+    """A value is not acceptable (blank title, negative copies, bad email...).
+
+    The classes check their own data and raise this, so the menu and the API
+    only ever have to catch one family of errors: LibraryError.
+    """
+
+    def __init__(self, field: str, message: str) -> None:
+        super().__init__("ValidationError", message)
+        self.field = field
 
 
 # --- Rule violations: the code is the rule number -------------------------
@@ -109,14 +144,7 @@ class ItemNotAvailableError(LibraryError):
         super().__init__("R7", f"No copies of '{title}' are available.")
         self.title = title
 
-class ValidationError(LibraryError):
-    """Data that is not valid, such as a bad CSV cell or a repeated ID."""
 
-    def __init__(self, field: str, message: str) -> None:
-        super().__init__("ValidationError", message)
-        self.field = field
-
-        
 class RenewalNotAllowedError(LibraryError):
     """R2 or R6: the code depends on the situation, so use a factory method.
 
