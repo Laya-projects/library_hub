@@ -8,16 +8,19 @@ the menu or the API decides how to show it.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from libraryhub import calculations
+from libraryhub.audit import AuditLog, audit
 from libraryhub.errors import (
     BorrowLimitExceededError,
     DuplicateLoanError,
     ItemNotAvailableError,
     ItemNotBorrowableError,
     ItemNotFoundError,
+    LibraryError,
     LoanAlreadyReturnedError,
     LoanNotFoundError,
     MemberNotFoundError,
@@ -29,8 +32,8 @@ from libraryhub.items import validate_isbn
 from libraryhub.loans import Fine, Loan
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-    from datetime import date
+    from collections.abc import Callable, Iterator
+    from datetime import date, datetime
 
     from libraryhub.items import LibraryItem
     from libraryhub.members import Member
@@ -40,6 +43,8 @@ if TYPE_CHECKING:
         LoanRepository,
         MemberRepository,
     )
+
+logger = logging.getLogger(__name__)
 
 
 # --- Small result objects: data for the menu or the API to show -------------
@@ -87,6 +92,19 @@ class OverdueLine:
     fine_so_far: int  # calculated, not stored until the item is returned
 
 
+class UnpaidFineLine(NamedTuple):
+    member: Member
+    amount: int
+
+    @property
+    def fine(self) -> int:
+        return self.amount
+
+    @property
+    def unpaid(self) -> int:
+        return self.amount
+
+
 class Library:
     def __init__(
         self,
@@ -94,11 +112,14 @@ class Library:
         members: MemberRepository,
         loans: LoanRepository,
         fines: FineRepository,
+        audit_log: AuditLog | None = None,
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._items = items
         self._members = members
         self._loans = loans
         self._fines = fines
+        self.audit_log = audit_log if audit_log is not None else AuditLog(clock=clock)
         # One first-come, first-served queue of member IDs per ISBN. It lives in
         # memory only and is lost on exit. Phase 3 moves it behind a repository
         # (the reservations table).
@@ -200,41 +221,57 @@ class Library:
         if self.available_copies(item.isbn) < self._place_in_line(member, item):
             raise ItemNotAvailableError(item.title)
 
+    @audit("borrow")
     def borrow(self, member_id: str, isbn: str, today: date) -> Loan:
-        member = self.get_member(member_id)
-        item = self.get_item(isbn)
-        for check in self._borrow_checks():
-            check(member, item)  # the first broken rule raises, the rest never run
-        loan = Loan(
-            member.member_id,
-            item.isbn,
-            today,
-            calculations.due_date(today, item, member),
-        )
-        self._loans.add(loan)
-        queue = self._waiting.get(item.isbn, [])
-        if member.member_id in queue:
-            queue.remove(member.member_id)  # their turn has come
-        return loan
+        try:
+            member = self.get_member(member_id)
+            item = self.get_item(isbn)
+            for check in self._borrow_checks():
+                check(member, item)  # the first broken rule raises, the rest never run
+            loan = Loan(
+                member.member_id,
+                item.isbn,
+                today,
+                calculations.due_date(today, item, member),
+            )
+            self._loans.add(loan)
+            queue = self._waiting.get(item.isbn, [])
+            if member.member_id in queue:
+                queue.remove(member.member_id)  # their turn has come
+            logger.info("Borrow successful: member %s borrowed %s", member_id, isbn)
+            return loan
+        except LibraryError as err:
+            logger.warning(
+                "Borrow refused: member %s, isbn %s - %s", member_id, isbn, err
+            )
+            raise
 
     # --- Returning ------------------------------------------------------------
 
+    @audit("return")
     def return_item(self, loan_id: str, today: date) -> ReturnResult:
-        loan = self._get_open_loan(loan_id)
-        member = self.get_member(loan.member_id)
-        item = self.get_item(loan.isbn)
-        days = loan.days_late(today)
-        fine = loan.fine(today, member, item)
-        if fine > 0:
-            self._fines.add(Fine(loan.loan_id, fine))
-        loan.return_date = today  # last, so a failed fine leaves the loan open
-        self._loans.update(loan)  # a database repository only sees this call
-        queue = self._waiting.get(item.isbn, [])
-        next_waiting = self._members.get(queue[0]) if queue else None
-        return ReturnResult(loan, member, item, days, fine, next_waiting)
+        try:
+            loan = self._get_open_loan(loan_id)
+            member = self.get_member(loan.member_id)
+            item = self.get_item(loan.isbn)
+            days = loan.days_late(today)
+            fine = loan.fine(today, member, item)
+            if fine > 0:
+                self._fines.add(Fine(loan.loan_id, fine))
+            loan.return_date = today  # last, so a failed fine leaves the loan open
+            self._loans.update(loan)  # a database repository only sees this call
+            queue = self._waiting.get(item.isbn, [])
+            next_waiting = self._members.get(queue[0]) if queue else None
+            result = ReturnResult(loan, member, item, days, fine, next_waiting)
+            logger.info("Return successful: loan %s returned", loan_id)
+            return result
+        except LibraryError as err:
+            logger.warning("Return refused: loan %s - %s", loan_id, err)
+            raise
 
     # --- Renewing ---------------------------------------------------------------
 
+    @audit("renew")
     def renew(self, loan_id: str, today: date) -> RenewResult:
         """Renew a loan (R2, R6).
 
@@ -242,20 +279,30 @@ class Library:
         member's loan period, so no rule here depends on the date. It is kept so
         borrow, return_item and renew are called the same way.
         """
-        loan = self._get_open_loan(loan_id)
-        member = self.get_member(loan.member_id)
-        item = self.get_item(loan.isbn)
-        if item.max_renewals() == 0:
-            raise RenewalNotAllowedError.magazine()  # R2
-        if loan.renewals >= item.max_renewals():
-            raise RenewalNotAllowedError.limit_reached(item.title, loan.renewals)  # R6
-        if self._waiting.get(item.isbn):
-            raise RenewalNotAllowedError.someone_waiting(item.title)  # R6
-        loan.renew(member)
-        self._loans.update(loan)
-        return RenewResult(
-            loan, item, loan.renewals, item.max_renewals(), loan.due_date
-        )
+        try:
+            loan = self._get_open_loan(loan_id)
+            member = self.get_member(loan.member_id)
+            item = self.get_item(loan.isbn)
+            if item.max_renewals() == 0:
+                raise RenewalNotAllowedError.magazine()  # R2
+            if loan.renewals >= item.max_renewals():
+                raise RenewalNotAllowedError.limit_reached(
+                    item.title, loan.renewals
+                )  # R6
+            if self._waiting.get(item.isbn):
+                raise RenewalNotAllowedError.someone_waiting(item.title)  # R6
+            loan.renew(member)
+            self._loans.update(loan)
+            result = RenewResult(
+                loan, item, loan.renewals, item.max_renewals(), loan.due_date
+            )
+            logger.info(
+                "Renewal successful: loan %s renewed to %s", loan_id, loan.due_date
+            )
+            return result
+        except LibraryError as err:
+            logger.warning("Renewal refused: loan %s - %s", loan_id, err)
+            raise
 
     # --- The waiting list -------------------------------------------------------
 
@@ -291,14 +338,49 @@ class Library:
         ]
         return MemberLoans(member, lines, self.unpaid_fines_for(member.member_id))
 
-    def overdue_report(self, today: date) -> list[OverdueLine]:
-        """Overdue loans, most days late first."""
-        lines: list[OverdueLine] = []
+    def iter_overdue(self, today: date) -> Iterator[OverdueLine]:
+        """Yield overdue loans one at a time."""
         for loan in self._loans.list_open():
             days = loan.days_late(today)
             if days > 0:
                 member = self.get_member(loan.member_id)
                 item = self.get_item(loan.isbn)
                 fine = loan.fine(today, member, item)
-                lines.append(OverdueLine(loan, member, item, days, fine))
-        return sorted(lines, key=lambda line: (-line.days_late, line.loan.loan_id))
+                yield OverdueLine(loan, member, item, days, fine)
+
+    def overdue_report(self, today: date) -> list[OverdueLine]:
+        """Overdue loans, most days late first."""
+        return sorted(
+            self.iter_overdue(today),
+            key=lambda line: (-line.days_late, line.loan.loan_id),
+        )
+
+    def items_by_category(self) -> dict[str, list[str]]:
+        """Category mapped to the sorted titles in it."""
+        items = self._items.list_all()
+        categories = sorted({item.category for item in items if item.category})
+        return {
+            category: sorted(
+                [item.title for item in items if item.category == category],
+                key=lambda title: title,
+            )
+            for category in categories
+        }
+
+    def category_report(self) -> dict[str, list[str]]:
+        """Alias for items_by_category."""
+        return self.items_by_category()
+
+    def members_with_unpaid_fines(self) -> list[UnpaidFineLine]:
+        """Members with unpaid fines > 0, largest amount first, ties by name."""
+        all_lines = [
+            UnpaidFineLine(m, self.unpaid_fines_for(m.member_id))
+            for m in self._members.list_all()
+        ]
+        # filter keeps only members with debt, separating the calculation from the condition.
+        owing = filter(lambda line: line.amount > 0, all_lines)
+        return sorted(owing, key=lambda line: (-line.amount, line.member.name))
+
+    def unpaid_fines_report(self) -> list[UnpaidFineLine]:
+        """Alias for members_with_unpaid_fines."""
+        return self.members_with_unpaid_fines()

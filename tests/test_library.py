@@ -1,11 +1,13 @@
 import copy
 import inspect
+import logging
 import re
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
 from libraryhub import library as library_module
 from libraryhub.csv_loader import load_data
 from libraryhub.errors import (
@@ -23,7 +25,7 @@ from libraryhub.errors import (
     ValidationError,
 )
 from libraryhub.library import Library
-from libraryhub.loans import Loan
+from libraryhub.loans import Fine, Loan
 from libraryhub.repositories import (
     InMemoryFineRepository,
     InMemoryItemRepository,
@@ -536,3 +538,195 @@ def test_library_has_no_file_access_clock_or_printing():
     forbidden = [r"\bopen\(", r"import csv", r"today\(\)", r"now\(\)", r"\bprint\("]
     for pattern in forbidden:
         assert re.search(pattern, source) is None
+
+
+# --- Step 7: Audit trail, generator, reports, logging ------------------------
+
+
+def test_audit_preserves_method_name():
+    assert Library.borrow.__name__ == "borrow"
+    assert Library.return_item.__name__ == "return_item"
+    assert Library.renew.__name__ == "renew"
+
+
+def test_successful_borrow_adds_exactly_one_entry_with_fixed_clock(world):
+    fixed_time = datetime(2026, 10, 12, 10, 0, 0)
+    world.library.audit_log.clock = lambda: fixed_time
+
+    assert len(world.library.audit_log) == 0
+    loan = world.library.borrow(ASHA, WINGS, TODAY)
+
+    assert len(world.library.audit_log) == 1
+    entry = world.library.audit_log.entries[0]
+    assert entry.time == fixed_time
+    assert entry.action == "borrow"
+    assert entry.member_id == ASHA
+    assert entry.isbn == WINGS
+    assert entry.member_id == loan.member_id
+
+
+def test_refused_borrow_adds_no_audit_entry(world):
+    fixed_time = datetime(2026, 10, 12, 10, 0, 0)
+    world.library.audit_log.clock = lambda: fixed_time
+
+    # R1: Reference item is not borrowable
+    with pytest.raises(ItemNotBorrowableError):
+        world.library.borrow(ASHA, ENCYCLOPAEDIA, TODAY)
+
+    assert len(world.library.audit_log) == 0
+
+
+def test_successful_return_and_renew_add_audit_entries(world):
+    fixed_time = datetime(2026, 10, 12, 11, 0, 0)
+    world.library.audit_log.clock = lambda: fixed_time
+
+    # Return L001
+    ret = world.library.return_item("L001", TODAY)
+    assert len(world.library.audit_log) == 1
+    assert world.library.audit_log.entries[0].action == "return"
+    assert world.library.audit_log.entries[0].member_id == ret.member.member_id
+    assert world.library.audit_log.entries[0].isbn == ret.item.isbn
+
+    # Renew L003
+    ren = world.library.renew("L003", TODAY)
+    assert len(world.library.audit_log) == 2
+    assert world.library.audit_log.entries[1].action == "renew"
+    assert world.library.audit_log.entries[1].member_id == ren.loan.member_id
+    assert world.library.audit_log.entries[1].isbn == ren.item.isbn
+
+
+def test_iter_overdue_is_lazy(world):
+    gen = world.library.iter_overdue(TODAY)
+    assert inspect.isgenerator(gen)
+
+    # Lazily fetch the first overdue line without processing all loans
+    first = next(gen)
+    assert first.loan.loan_id == "L001"
+    assert first.days_late == 20
+    assert first.fine_so_far == 100
+
+    second = next(gen)
+    assert second.loan.loan_id == "L002"
+    assert second.days_late == 7
+    assert second.fine_so_far == 14
+
+    with pytest.raises(StopIteration):
+        next(gen)
+
+
+def test_overdue_report_still_matches_brief(world):
+    report = world.library.overdue_report(TODAY)
+    assert [
+        (line.loan.loan_id, line.days_late, line.fine_so_far) for line in report
+    ] == [
+        ("L001", 20, 100),
+        ("L002", 7, 14),
+    ]
+
+
+def test_items_by_category_report_on_starter_data(world):
+    report = world.library.items_by_category()
+    assert report == {
+        "Biography": ["Wings of Fire"],
+        "Fiction": ["The Alchemist"],
+        "History": ["Sapiens"],
+        "Magazines": ["India Today (Oct 2026)"],
+        "Programming": ["Python Crash Course"],
+        "Reference": ["Encyclopaedia of Science"],
+        "Software Engineering": ["Clean Code"],
+    }
+    # Also verify alias
+    assert world.library.category_report() == report
+
+
+def test_members_with_unpaid_fines_on_starter_data(world):
+    report = world.library.members_with_unpaid_fines()
+    assert len(report) == 1
+    line = report[0]
+    assert line.member.name == "Karthik N"
+    assert line.amount == 120
+    # Also verify unpacking and properties
+    member, amt = line
+    assert member.name == "Karthik N"
+    assert amt == 120
+    assert line.fine == 120
+    assert line.unpaid == 120
+    # Also verify alias
+    assert world.library.unpaid_fines_report() == report
+
+
+def test_members_with_unpaid_fines_sorting_largest_first_ties_by_name(world):
+    # Add a fine for Rahul Mehta (M002) of 120 so both Karthik and Rahul owe 120
+    world.fines.add(Fine("L007", 120, paid=False))
+    # Ties by name: "Karthik N" comes before "Rahul Mehta"
+    report = world.library.members_with_unpaid_fines()
+    assert [(line.member.name, line.amount) for line in report] == [
+        ("Karthik N", 120),
+        ("Rahul Mehta", 120),
+    ]
+
+
+def test_logging_successful_and_refused_operations(world, caplog):
+    caplog.set_level(logging.INFO, logger="libraryhub.library")
+
+    # Successful borrow logs INFO
+    world.library.borrow(ASHA, WINGS, TODAY)
+    assert any(
+        rec.levelno == logging.INFO and "Borrow successful" in rec.getMessage()
+        for rec in caplog.records
+    )
+
+    # Refused borrow logs WARNING
+    with pytest.raises(ItemNotBorrowableError):
+        world.library.borrow(ASHA, ENCYCLOPAEDIA, TODAY)
+    assert any(
+        rec.levelno == logging.WARNING and "Borrow refused" in rec.getMessage()
+        for rec in caplog.records
+    )
+
+    # Successful return logs INFO
+    world.library.return_item("L001", TODAY)
+    assert any(
+        rec.levelno == logging.INFO and "Return successful" in rec.getMessage()
+        for rec in caplog.records
+    )
+
+    # Refused return logs WARNING
+    with pytest.raises(LoanAlreadyReturnedError):
+        world.library.return_item("L001", TODAY)
+    assert any(
+        rec.levelno == logging.WARNING and "Return refused" in rec.getMessage()
+        for rec in caplog.records
+    )
+
+    # Successful renew logs INFO
+    world.library.renew("L003", TODAY)
+    assert any(
+        rec.levelno == logging.INFO and "Renewal successful" in rec.getMessage()
+        for rec in caplog.records
+    )
+
+    # Refused renew logs WARNING (magazines cannot be renewed R2)
+    # L009 is a magazine
+    with pytest.raises(LoanAlreadyReturnedError):
+        world.library.renew("L009", TODAY)
+    assert any(
+        rec.levelno == logging.WARNING and "Renewal refused" in rec.getMessage()
+        for rec in caplog.records
+    )
+
+
+def test_unexpected_bug_propagates_unlabelled_without_warning_log(world, caplog):
+    caplog.set_level(logging.WARNING, logger="libraryhub.library")
+
+    # Simulate an unexpected bug (e.g. KeyError) during borrow check
+    def buggy_check(member, item):
+        raise KeyError("corrupt_data")
+
+    world.library._borrow_checks = lambda: [buggy_check]
+
+    with pytest.raises(KeyError, match="corrupt_data"):
+        world.library.borrow(ASHA, WINGS, TODAY)
+
+    assert not any("Borrow refused" in rec.getMessage() for rec in caplog.records)
+

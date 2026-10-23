@@ -13,6 +13,7 @@ Decision log for LibraryHub Mini. Each entry gives the problem, the options, the
 | D5 | How are models written, and bad values handled? | Plain classes, `ValidationError` |
 | D6 | Where does the date and money maths live? | Plain functions in `calculations.py` |
 | D7 | How do repositories and the loader work? | `get` returns `None`, loader checks everything first |
+| D8 | How is the audit trail recorded and timed? | `@audit` decorator, injectable clock on `AuditLog` |
 
 ## Phase 1: Python + OOP
 
@@ -75,6 +76,20 @@ Decision log for LibraryHub Mini. Each entry gives the problem, the options, the
   - The loader reads and checks all four files first (unique IDs, every loan and fine points at something real), and only then stores. A broken or missing file raises `ValidationError` and stores nothing.
 - **Why:** `Library` stays free of `open()` and `csv`, and bad data never reaches the repositories.
 - **Known, for Phase 2:** `InMemoryLoanRepository.get` scans the whole list, so it is O(n). It will be measured in the complexity audit. Reporting line numbers for duplicate IDs is task 2.3.
+
+### D8. How is the audit trail recorded and timed?
+- **Problem:** we need an audit trail of every successful mutating action (`borrow`, `return_item`, `renew`), without cluttering domain rules or allowing `Library` to read the system clock directly.
+- **Options for recording:**
+  - A) explicit calls inside each method (`self.audit_log.record(...)`).
+  - B) an `@audit(action)` decorator wrapping mutating methods.
+- **Options for the clock:**
+  - A) reading `datetime.now()` directly inside `Library`.
+  - B) an injectable `clock` callable on `AuditLog` / `Library` (defaulting to `datetime.now`).
+- **Chosen: B for both.**
+- **Why:**
+  - An `@audit` decorator separates auditing (a cross-cutting concern) from business logic. Methods focus purely on Rulebook enforcement and state transitions. If a method raises an exception when a rule is broken, the decorator naturally skips recording without error-handling boilerplate.
+  - Keeping the clock on `AuditLog` (and injectable via `Library.__init__` or test properties) honors the architecture rule that `Library` never reads the system clock itself. Tests can pass or assign a fixed clock callable to verify audit timestamps deterministically. Scoping `AuditLog` to the `Library` instance prevents test state leakage.
+- **Known, for Phase 3:** the audit entry is recorded after the action has happened. If `record` or `_extract_audit_targets` raised, the loan would already be stored but the caller would get an exception. That is a programmer-error case, so it is fine for now; Phase 3's database transactions will fix it properly.
 
 ## Phase 2: DSA
 
