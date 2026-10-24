@@ -82,20 +82,34 @@ Handy IDs from the sample data: member `M001` (Asha Raman), book
 
 ## The menu
 
-| Choice | What it does |
-|--------|--------------|
-| 1 | List the catalogue with copies available |
-| 2 | Search by title or author (ignores case) |
-| 3 | Borrow an item (asks for member ID and ISBN) |
-| 4 | Return a loan (asks for loan ID, shows any fine) |
-| 5 | Renew a loan |
-| 6 | Join the waiting list for a title |
-| 7 | Show a member's loans and unpaid fines |
-| 8 | Overdue report |
-| 0 | Exit |
+The program works like a librarian's desk: type a number, answer a few
+questions, and it replies. Data is held in memory and reloaded from the CSV
+files on every start, so nothing is saved when you exit.
+
+| Choice | What it does | What you type | Example result |
+|--------|--------------|---------------|----------------|
+| 1 | List the catalogue | nothing | A table. `2 of 2` means both copies are free, `0 of 1` means the only copy is out, `not borrowable` is a reference item. |
+| 2 | Search by title or author (ignores case) | a word, e.g. `paulo` | `1 result:` and the matching items, or `No items match 'zzz'.` |
+| 3 | Borrow | member ID, then ISBN | `OK: Asha Raman borrowed 'Wings of Fire'. Due 2026-10-26.` If every copy is out it asks `Join the waiting list? (y/n)`. `y` joins the queue, anything else skips. |
+| 4 | Return | loan ID | `OK: Rahul Mehta returned 'The Alchemist'. Late by 20 days. Fine: ₹100.` Adds `Next on waiting list: <name>.` when someone is waiting. |
+| 5 | Renew | loan ID | `OK: Renewed 'Sapiens' (renewal 1 of 2). New due date …` Refused for magazines, at the renewal limit, or when someone is waiting. |
+| 6 | Join the waiting list | member ID, then ISBN | `OK: Asha Raman is #1 on the waiting list for 'The Alchemist'.` The number is the place in the queue. |
+| 7 | Member loans | member ID | The member's current loans, `OVERDUE (20 days)` when late, how many items they hold out of their limit, and their unpaid fines. |
+| 8 | Overdue report | nothing | Every late loan, longest overdue first. `DAYS` is days late, `FINE SO FAR` is what they would owe if returned today, with totals at the end. |
+| 0 | Exit | nothing | Quits the program. |
 
 Money is whole rupees (`₹100`). Dates are `YYYY-MM-DD`. Errors look like
 `ERROR [R3]: ...` for a rule violation and `ERROR [ClassName]: ...` otherwise.
+
+**Why the dates are fixed:** `TODAY=2026-10-12` makes the program pretend that
+is today, so everyone sees the same overdue loans and fines.
+
+**Try a short story** (borrow, waiting list, return):
+
+1. `3`, `M001`, `9780000000028`: no copies are free, so it asks about the
+   waiting list. Answer `y`.
+2. `4`, `L001`: the copy comes back, and the output ends with
+   `Next on waiting list: Asha Raman.`
 
 ## Run the tests
 
@@ -139,6 +153,17 @@ top. The menu never applies a rule itself; it asks `Library` and prints.
 See [DECISIONS.md](DECISIONS.md) for the choices made in this phase and why.
 
 ## Rules and tests
+## Rules and tests
 
-The traceability table (rules R1 to R10, the code that enforces each, and the
-tests that prove it) is added in step 10.2.
+| Rule | What it says | Enforced in | Tests |
+|------|--------------|-------------|-------|
+| R1 | Reference items can never be borrowed | `Library._check_borrowable`, `ItemNotBorrowableError` | TODO |
+| R2 | Magazines get 7 days and cannot be renewed | `Library.renew` (via `item.max_renewals()`), `calculations.due_date` | TODO |
+| R3 | Each membership has an item limit | `Library._check_limit`, `Member.borrow_limit` | TODO |
+| R4 | Borrowing is blocked when unpaid fines are above ₹100 | `Library._check_fines`, `calculations.exceeds_fine_limit` | TODO |
+| R5 | A fine is capped at the item's price | `Loan.fine` / `calculations` | TODO |
+| R6 | Renewals are limited, and not allowed while someone waits | `Library.renew`, `RenewalNotAllowedError` | TODO |
+| R7 | No free copy: offer the waiting list, first come first served | `Library._check_available`, `Library.reserve`, `Library._place_in_line` | TODO |
+| R8 | A member cannot hold two copies of the same title | `Library._check_no_duplicate`, `DuplicateLoanError` | TODO |
+| R9 | An ISBN is exactly 13 digits | `items.validate_isbn`, `InvalidISBNError` | TODO |
+| R10 | Returning on the due date is not late | `Loan.days_late` | TODO |
