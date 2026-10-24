@@ -1,5 +1,3 @@
-(.venv) PS C:\Users\laya_r\OneDrive - LevelShift\library_hub> $env:TODAY="2026-10-12"; python -m libraryhub.main
-LibraryHub Mini - today is 2026-10-12
 === LibraryHub Mini ===
 1. List catalogue
 2. Search by title or author
@@ -32,7 +30,7 @@ Active loans: 1 of 5
 Unpaid fines: ₹0
 > 8
 Overdue loans as of 2026-10-12
-LOAN  MEMBER       TITLE                DUE         DAYS  FINE SO FAR       
+LOAN  MEMBER       TITLE                DUE         DAYS  FINE SO FAR
 L001  Rahul Mehta  The Alchemist        2026-09-22    20  ₹100
 L002  Karthik N    Python Crash Course  2026-10-05     7  ₹14
 Total overdue: 2   Fines so far: ₹114
