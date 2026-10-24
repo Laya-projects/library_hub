@@ -166,8 +166,8 @@ def test_option_3_reference_item_is_r1(library_world):
 def test_option_3_unavailable_then_yes_joins_the_waiting_list(library_world):
     transcript = run_menu(library_world.library, ["3", "M001", ALCHEMIST_ISBN, "y", "0"])
     assert transcript[4:6] == [
-        "No copies of 'The Alchemist' are available. "
-        "Join the waiting list? (y/n): y",
+        ("No copies of 'The Alchemist' are available. "
+        "Join the waiting list? (y/n): y"),
         "OK: Asha Raman is #1 on the waiting list for 'The Alchemist'.",
     ]
 
@@ -175,8 +175,8 @@ def test_option_3_unavailable_then_yes_joins_the_waiting_list(library_world):
 def test_option_3_unavailable_then_no_prints_nothing_more(library_world):
     transcript = run_menu(library_world.library, ["3", "M001", ALCHEMIST_ISBN, "n", "0"])
     assert transcript[4:] == [
-        "No copies of 'The Alchemist' are available. "
-        "Join the waiting list? (y/n): n",
+        ("No copies of 'The Alchemist' are available. "
+        "Join the waiting list? (y/n): n"),
         "> 0",
     ]
 
@@ -299,11 +299,11 @@ def test_option_7_member_loans_matches_the_brief(library_world):
     assert transcript[1:] == [
         "> 7",
         "Member ID: M002",
-        "Loans for Rahul Mehta (Regular: 5 items, 21 days, ₹5/day)\n"
+        ("Loans for Rahul Mehta (Regular: 5 items, 21 days, ₹5/day)\n"
         "LOAN  TITLE          ISSUED      DUE         STATUS\n"
         "L001  The Alchemist  2026-09-01  2026-09-22  OVERDUE (20 days)\n"
         "Active loans: 1 of 5\n"
-        "Unpaid fines: ₹0",
+        "Unpaid fines: ₹0"),
         "> 0",
     ]
 
@@ -317,11 +317,11 @@ def test_option_8_overdue_report_matches_the_brief(library_world):
     transcript = run_menu(library_world.library, ["8", "0"])
     assert transcript[1:] == [
         "> 8",
-        "Overdue loans as of 2026-10-12\n"
+        ("Overdue loans as of 2026-10-12\n"
         "LOAN  MEMBER       TITLE                DUE         DAYS  FINE SO FAR\n"
         "L001  Rahul Mehta  The Alchemist        2026-09-22    20  ₹100\n"
         "L002  Karthik N    Python Crash Course  2026-10-05     7  ₹14\n"
-        "Total overdue: 2   Fines so far: ₹114",
+        "Total overdue: 2   Fines so far: ₹114"),
         "> 0",
     ]
 
