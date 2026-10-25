@@ -32,15 +32,21 @@ def make_fake_books(n: int, seed: int = 42) -> list[Book]:
                  rng.randint(50, 1200), rng.randint(100, 1500), rng.randint(1, 3))
         )
     return books
+from types import SimpleNamespace
+
+
+def load_fake_world(n: int, seed: int = 42) -> SimpleNamespace:
+    """The library plus the repositories behind it, for benchmarks."""
+    items = InMemoryItemRepository()
+    for book in make_fake_books(n, seed):
+        items.add(book)
+    members = InMemoryMemberRepository()
+    loans = InMemoryLoanRepository()
+    fines = InMemoryFineRepository()
+    library = Library(items, members, loans, fines)
+    return SimpleNamespace(library=library, members=members, loans=loans)
+
 
 def load_fake_library(n: int, seed: int = 42) -> Library:
     """A Library holding n fake books and no members, loans or fines."""
-    items = InMemoryItemRepository()
-    for book in make_fake_books(n, seed):
-        items.add(book)  # the repository refuses a repeated ISBN
-    return Library(
-        items,
-        InMemoryMemberRepository(),
-        InMemoryLoanRepository(),
-        InMemoryFineRepository(),
-    )
+    return load_fake_world(n, seed).library
