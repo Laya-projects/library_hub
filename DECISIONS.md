@@ -71,6 +71,7 @@ Decision log for LibraryHub Mini. Each entry gives the problem, the options, the
 |---|---|---|
 | D1 | How are the benchmarks measured? | Median of several runs, setup outside the timer |
 | D2 | How is the catalogue sort written? | One `sorted()` with a tuple key |
+| D3 | How do I find repeats and pairs in one pass? | A dict or set, one lookup per item |
 
 ### D1. How are the benchmarks measured? (task 2.1, 2.2)
 - **Problem:** one timing run is mostly noise (other programs, garbage collection, a cold cache), so a single number can point to the wrong complexity.
@@ -93,6 +94,18 @@ Decision log for LibraryHub Mini. Each entry gives the problem, the options, the
 - **Details:**
   - `top_category` maps Programming and Software Engineering to Technology, so they sort together.
   - Negation only works for numbers. A string that had to be descending would need B or C.
+
+### D3. Why dicts and sets for duplicates, grouping, counting and two-sum? (task 2.3)
+- **Problem:** four tasks all ask "have I seen this before?" for every item: repeated ISBNs in a CSV, titles per author, how often a title was borrowed, and two books whose pages add up to a target.
+- **Options:** A) a nested loop that compares every item with every other item. B) sort first, then compare neighbours. C) a dict or set that remembers what has been seen.
+- **Chosen: C.**
+- **Why:** a dict or set finds a key in O(1) on average, because the key's hash tells Python where to look. Each item is handled once, so the whole task is one pass, O(n), where the nested loop is O(n²). Sorting first costs O(n log n) and would also lose the original line numbers and the catalogue order.
+- **Details:**
+  - Duplicates: a dict from ISBN to the title that first used it, so the message can say what the ISBN was "already used by". The line number comes from `reader.line_num`.
+  - Grouping: a `defaultdict(list)` from author to titles, with authors sorted A to Z at the end.
+  - Counting: `Counter` over the ISBNs of all loans, then sorted by `(-count, title)` so equal counts come out A to Z.
+  - Two-sum: a dict from pages to item. Each item first looks for `target - pages` in the dict, and only then adds itself, so an item is never paired with itself. Reference items are skipped because they cannot be borrowed.
+  - A dict key must be hashable. Strings, ints and tuples are. A list cannot be a key.
 
 
 ## Phase 3: Database
