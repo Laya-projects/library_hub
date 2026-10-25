@@ -67,7 +67,33 @@ Decision log for LibraryHub Mini. Each entry gives the problem, the options, the
 
 ## Phase 2: DSA
 
-(Entries to be added in Phase 2.)
+| # | Question | Choice |
+|---|---|---|
+| D1 | How are the benchmarks measured? | Median of several runs, setup outside the timer |
+| D2 | How is the catalogue sort written? | One `sorted()` with a tuple key |
+
+### D1. How are the benchmarks measured? (task 2.1, 2.2)
+- **Problem:** one timing run is mostly noise (other programs, garbage collection, a cold cache), so a single number can point to the wrong complexity.
+- **Options:** A) time one run. B) the mean of several runs. C) the median of several runs, with the set-up kept outside the timed block.
+- **Chosen: C.**
+- **Why:** the median ignores the odd slow run, where a mean is dragged up by it. Building a library of 50,000 books costs far more than the call being measured, so only the call itself is timed.
+- **Details:**
+  - `median_ms` and `median_ms_with_setup` in `dsa/timing.py` use `time.perf_counter()` and report milliseconds.
+  - 7 runs by default, 3 for the hand-written sorts (bubble sort at 10,000 books takes seconds), and 21 for searches that take under a millisecond.
+  - Results under 1 ms are noisy. The shape (flat, linear or quadratic) is reliable. The exact ratios are not, and the report says so.
+
+### D2. How is the catalogue sort written? (task 2.2)
+- **Problem:** the catalogue must be ordered by top-level category ascending, then pages descending, then title ascending. The directions are mixed, so a plain `sorted()` cannot do it in one go.
+- **Options:** A) one `sorted()` with a tuple key and the pages negated: `(top_category(item), -item.pages, item.title)`. B) three stable passes (title, then pages, then category). C) `functools.cmp_to_key` with a comparison function.
+- **Chosen: A.**
+- **Why:** one pass and one readable line. Python compares tuples field by field, so the first field decides and the later ones only break ties. Negating a number reverses its direction. The same key also works with my hand-written sorts, because they take a `key`.
+- **Rejected:**
+  - B works only because Python's sort is stable, and it is easy to write the passes in the wrong order (the last pass must be the most important key).
+  - C is more code and slower, because it calls a Python function for every comparison.
+- **Details:**
+  - `top_category` maps Programming and Software Engineering to Technology, so they sort together.
+  - Negation only works for numbers. A string that had to be descending would need B or C.
+
 
 ## Phase 3: Database
 
