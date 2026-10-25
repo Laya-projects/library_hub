@@ -184,6 +184,8 @@ def format_returned(result: ReturnResult) -> str:
     )
     if result.next_waiting is not None:
         text += f"\nNext on waiting list: {result.next_waiting.name}."
+    if result.still_waiting:
+        text += "\n" + format_waiting_list(result.item, result.still_waiting)
     return text
 
 
@@ -199,3 +201,8 @@ def format_renewed(result: RenewResult) -> str:
 def format_waiting_joined(member: Member, item: LibraryItem, position: int) -> str:
     """OK: Sneha Iyer is #1 on the waiting list for 'The Alchemist'."""
     return f"OK: {member.name} is #{position} on the waiting list for '{item.title}'."
+
+def format_waiting_list(item: LibraryItem, members: Sequence[Member]) -> str:
+    """Waiting list for 'The Alchemist': Sneha Iyer, Asha Raman"""
+    names = ", ".join(member.name for member in members)
+    return f"Waiting list for '{item.title}': {names}"

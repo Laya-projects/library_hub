@@ -740,3 +740,29 @@ def test_a_blank_search_is_refused(world, blank):
     assert caught.value.formatted() == (
         "ERROR [ValidationError]: Search text cannot be blank."
     )
+
+def test_waiting_list_is_first_come_first_served(library_world):
+    library = library_world.library
+    library.reserve("M005", ALCHEMIST)
+    library.reserve("M001", ALCHEMIST)
+    assert [m.member_id for m in library.waiting_list(ALCHEMIST)] == ["M005", "M001"]
+
+
+def test_return_names_the_first_and_lists_the_rest(library_world):
+    library = library_world.library
+    library.reserve("M005", ALCHEMIST)
+    library.reserve("M001", ALCHEMIST)
+    result = library.return_item("L001", TODAY)
+    assert result.next_waiting.member_id == "M005"
+    assert [m.member_id for m in result.still_waiting] == ["M001"]
+
+
+def test_the_second_in_line_cannot_jump_the_queue(library_world):
+    library = library_world.library
+    library.reserve("M005", ALCHEMIST)
+    library.reserve("M001", ALCHEMIST)
+    library.return_item("L001", TODAY)
+    with pytest.raises(ItemNotAvailableError):
+        library.borrow("M001", ALCHEMIST, TODAY)  # second in line, one free copy
+    library.borrow("M005", ALCHEMIST, TODAY)  # first in line gets it
+    assert [m.member_id for m in library.waiting_list(ALCHEMIST)] == ["M001"]

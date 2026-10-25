@@ -13,6 +13,7 @@ from libraryhub.formatters import (
     format_search_results,
     format_table,
     format_waiting_joined,
+    format_waiting_list,
 )
 from libraryhub.items import Book
 from libraryhub.library import LoanLine, MemberLoans
@@ -258,13 +259,29 @@ ASHA = SimpleNamespace(name="Asha Raman")
 ALCHEMIST = SimpleNamespace(title="The Alchemist")
 
 
-def _returned(days_late, fine, next_waiting=None):
+def _returned(days_late, fine, next_waiting=None, still_waiting=()):
     return SimpleNamespace(
         member=SimpleNamespace(name="Rahul Mehta"),
         item=ALCHEMIST,
         days_late=days_late,
         fine=fine,
         next_waiting=next_waiting,
+        still_waiting=still_waiting,
+    )
+
+
+def test_returned_lists_who_is_still_waiting():
+    sneha = SimpleNamespace(name="Sneha Iyer")
+    text = format_returned(_returned(20, 100, next_waiting=sneha, still_waiting=(ASHA,)))
+    assert text.splitlines()[-2:] == [
+        "Next on waiting list: Sneha Iyer.",
+        "Waiting list for 'The Alchemist': Asha Raman",
+    ]
+
+
+def test_waiting_list_line_names_everyone_in_order():
+    assert format_waiting_list(ALCHEMIST, [SimpleNamespace(name="Sneha Iyer"), ASHA]) == (
+        "Waiting list for 'The Alchemist': Sneha Iyer, Asha Raman"
     )
 
 

@@ -59,6 +59,7 @@ class ReturnResult:
     days_late: int
     fine: int
     next_waiting: Member | None  # first member in the waiting list, if any
+    still_waiting: tuple[Member, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -279,8 +280,11 @@ class Library:
             loan.return_date = today  # last, so a failed fine leaves the loan open
             self._loans.update(loan)  # a database repository only sees this call
             queue = self._waiting.get(item.isbn, deque())
-            next_waiting = self._members.get(queue[0]) if queue else None
-            result = ReturnResult(loan, member, item, days, fine, next_waiting)
+            waiting = [m for i in queue if (m := self._members.get(i)) is not None]
+            next_waiting = waiting[0] if waiting else None
+            result = ReturnResult(
+                loan, member, item, days, fine, next_waiting, tuple(waiting[1:])
+            )
             logger.info("Return successful: loan %s returned", loan_id)
             return result
         except LibraryError as err:
@@ -345,6 +349,12 @@ class Library:
             )
         queue.append(member.member_id)
         return len(queue)
+
+    def waiting_list(self, isbn: str) -> list[Member]:
+        """Members waiting for this title, first in line first."""
+        item = self.get_item(isbn)
+        queue = self._waiting.get(item.isbn, deque())
+        return [self.get_member(member_id) for member_id in queue]
 
     # --- Reports ----------------------------------------------------------------
 
