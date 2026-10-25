@@ -7,7 +7,9 @@ Set trace=True to print the list after every pass, as in the brief.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import Any, TypeVar
+from typing import Any, Protocol, TypeVar
+
+from libraryhub.dsa.categories import top_category
 
 T = TypeVar("T")
 
@@ -95,3 +97,47 @@ def selection_sort(
         if trace:
             print(f"  after pass {pass_number} (min={data[start]}): {data}")
     return data
+
+# --- The catalogue sort used by the website -----------------------------------
+
+
+class _Catalogued(Protocol):
+    """Anything with a title, a category and a page count (a Book, for example)."""
+
+    @property
+    def title(self) -> str: ...
+
+    @property
+    def category(self) -> str: ...
+
+    @property
+    def pages(self) -> int: ...
+
+
+C = TypeVar("C", bound=_Catalogued)
+
+
+def catalogue_sort(items: Sequence[C]) -> list[C]:
+    """Top-level category A-Z, then pages high to low, then title A-Z.
+
+    One sorted() with a tuple key. Python compares tuples field by field, so the
+    category decides first and the later fields only break ties. Negating the
+    pages reverses that one field. A title cannot be negated, so it goes last,
+    ascending (D15).
+    """
+    return sorted(
+        items,
+        key=lambda item: (top_category(item.category), -item.pages, item.title),
+    )
+
+
+def format_catalogue_sort(items: Sequence[_Catalogued]) -> str:
+    """Category, title and pages in columns, as in the brief. No header line."""
+    rows = [(top_category(i.category), i.title, str(i.pages)) for i in items]
+    if not rows:
+        return ""
+    widths = [max(len(row[col]) for row in rows) for col in range(3)]
+    return "\n".join(
+        f"{category.ljust(widths[0])}  {title.ljust(widths[1])}  {pages.rjust(widths[2])}"
+        for category, title, pages in rows
+    )
