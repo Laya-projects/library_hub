@@ -9,6 +9,7 @@ the menu or the API decides how to show it.
 from __future__ import annotations
 
 import logging
+from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -120,10 +121,10 @@ class Library:
         self._loans = loans
         self._fines = fines
         self.audit_log = audit_log if audit_log is not None else AuditLog(clock=clock)
-        # One first-come, first-served queue of member IDs per ISBN. It lives in
-        # memory only and is lost on exit. Phase 3 moves it behind a repository
-        # (the reservations table).
-        self._waiting: dict[str, list[str]] = {}
+        # One first-come, first-served queue (a deque) of member IDs per ISBN. It
+        # lives in memory only and is lost on exit. Phase 3 moves it behind a
+        # repository (the reservations table).
+        self._waiting: dict[str, deque[str]] = {}
 
     # --- Looking things up (they raise, so callers never meet None) ----------
 
@@ -199,7 +200,7 @@ class Library:
 
         A queued member keeps their place. Anyone else stands behind the queue.
         """
-        queue = self._waiting.get(item.isbn, [])
+        queue = self._waiting.get(item.isbn, deque())
         if member.member_id in queue:
             return queue.index(member.member_id) + 1
         return len(queue) + 1
@@ -252,7 +253,7 @@ class Library:
                 calculations.due_date(today, item, member),
             )
             self._loans.add(loan)
-            queue = self._waiting.get(item.isbn, [])
+            queue = self._waiting.get(item.isbn, deque())
             if member.member_id in queue:
                 queue.remove(member.member_id)  # their turn has come
             logger.info("Borrow successful: member %s borrowed %s", member_id, isbn)
@@ -277,7 +278,7 @@ class Library:
                 self._fines.add(Fine(loan.loan_id, fine))
             loan.return_date = today  # last, so a failed fine leaves the loan open
             self._loans.update(loan)  # a database repository only sees this call
-            queue = self._waiting.get(item.isbn, [])
+            queue = self._waiting.get(item.isbn, deque())
             next_waiting = self._members.get(queue[0]) if queue else None
             result = ReturnResult(loan, member, item, days, fine, next_waiting)
             logger.info("Return successful: loan %s returned", loan_id)
@@ -331,7 +332,7 @@ class Library:
             raise ItemNotBorrowableError(item.title)
         if self._holds_title(member, item):
             raise DuplicateLoanError(member.name, item.title)
-        queue = self._waiting.setdefault(item.isbn, [])
+        queue = self._waiting.setdefault(item.isbn, deque())
         if member.member_id in queue:
             raise ValidationError(
                 "waiting_list",

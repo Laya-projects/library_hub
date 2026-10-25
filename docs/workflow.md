@@ -59,3 +59,22 @@
 ## Step 10: Wrap-up
 
 - `README` with run instructions, `DECISIONS.md` (at least 3 entries), the traceability table, and Docker plus Jenkins running green.
+
+# Phase 2 : DSA 
+
+
+| Step | What | Output |
+| :--- | :--- | :--- |
+| **0** | **Setup:** new branch `feature/dsa`, new folder `src/libraryhub/dsa/`, a timing helper, and a generator that makes big test data (1,000 to 100,000 items) | Skeleton, test data generator |
+| **1** | **Analysis:** list where Phase 1 scans lists or loops, and write a Big-O table for each current operation | Notes in `docs/`, first `DECISIONS.md` entry |
+| **2** | **Searching:** linear search and binary search by ISBN or title on a sorted catalogue | Search functions plus tests |
+| **3** | **Sorting:** write two or three sorts yourself (for example insertion, merge, quick), make them stable, compare with `sorted()`, and use one for the reports | Sort functions plus tests |
+| **4** | **Hashing:** your own hash table with chaining for ISBN to item and member ID to member, handling collisions | Hash table class, an index used by the Library |
+| **5** | **Stack:** undo. Borrow, return and renew become small command objects, and an undo stack reverses the last one | Undo stack plus tests, wired into the menu |
+| **6** | **Queue:** waiting list. Replace the dictionary of lists with a real queue class, keeping first-come-first-served | Queue class, Library updated |
+| **7** | **Linked list:** a singly linked list for the borrowing history (append, iterate, reverse, remove) | Linked list class plus tests |
+| **8** | **Recursion:** walk the category tree, count and flatten items, and a recursive binary search | Recursive functions plus tests |
+| **9** | **Benchmarks:** time each version at several sizes, make a results table (and an optional chart), and write a short explanation of why one wins | `docs/benchmarks.md` |
+| **10** | **Wrap-up:** tests, ruff and mypy clean, coverage at 90% or more, README section, `DECISIONS.md` with at least 3 new entries, pull request | Phase 2 finished |
+
+
