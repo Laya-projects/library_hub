@@ -829,3 +829,49 @@ def test_undo_says_so_when_the_loan_has_gone(library_world):
     with pytest.raises(ValidationError, match="no longer exists"):
         library.undo()
     assert library.undo() is None  # the dead entry was dropped
+
+def test_borrow_history_is_newest_first_and_includes_returned_loans(library_world):
+    library = library_world.library
+    before = list(library.borrow_history("M001"))
+    first = library.borrow("M001", WINGS, TODAY)
+    library.return_item(first.loan_id, TODAY)
+    second = library.borrow("M001", WINGS, TODAY)
+    assert list(library.borrow_history("M001")) == [
+        second.loan_id,
+        first.loan_id,
+        *before,
+    ]
+
+
+def test_borrow_history_includes_loans_that_were_there_from_the_start(library_world):
+    library = library_world.library
+    before = list(library.borrow_history("M002"))
+    assert "L001" in before  # a starter loan
+    new = library.borrow("M002", WINGS, TODAY)
+    assert list(library.borrow_history("M002")) == [new.loan_id, *before]
+
+
+def test_borrow_history_has_every_loan_of_the_member(library_world):
+    history = library_world.library.borrow_history("M001")
+    stored = library_world.loans.list_for_member("M001")
+    assert sorted(history) == sorted(loan.loan_id for loan in stored)
+
+
+def test_an_undone_borrow_leaves_the_history(library_world):
+    library = library_world.library
+    before = list(library.borrow_history("M001"))
+    library.borrow("M001", WINGS, TODAY)
+    library.undo()
+    assert list(library.borrow_history("M001")) == before
+
+
+def test_an_undone_return_stays_in_the_history(library_world):
+    library = library_world.library
+    before = list(library.borrow_history("M001"))
+    loan = library.borrow("M001", WINGS, TODAY)
+    library.return_item(loan.loan_id, TODAY)
+    library.undo()  # the loan is open again; it is still one entry
+    assert list(library.borrow_history("M001")) == [loan.loan_id, *before]
+def test_borrow_history_of_an_unknown_member(library_world):
+    with pytest.raises(MemberNotFoundError):
+        library_world.library.borrow_history("M999")

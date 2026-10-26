@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from collections.abc import Container, Sequence
     from datetime import date
 
+    from libraryhub.dsa.history import BorrowHistory
     from libraryhub.items import LibraryItem
     from libraryhub.library import (
         MemberLoans,
@@ -219,3 +220,9 @@ def format_waiting_list(item: LibraryItem, members: Sequence[Member]) -> str:
     """Waiting list for 'The Alchemist': Sneha Iyer, Asha Raman"""
     names = ", ".join(member.name for member in members)
     return f"Waiting list for '{item.title}': {names}"
+
+
+def format_borrow_history(member: Member, history: BorrowHistory) -> str:
+    """Borrow history, Rahul Mehta (newest first):
+    L001 -> L007 -> L008 -> None"""
+    return f"Borrow history, {member.name} (newest first):\n{history}"

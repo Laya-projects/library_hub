@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from libraryhub import calculations
 from libraryhub.audit import AuditLog, audit
+from libraryhub.dsa.history import BorrowHistory
 from libraryhub.dsa.waiting_queue import WaitingQueue
 from libraryhub.errors import (
     BorrowLimitExceededError,
@@ -425,6 +426,24 @@ class Library:
             self._fines.remove_for_loan(entry.loan_id)
         loan.return_date = None  # the loan is open again
         self._loans.update(loan)
+
+    # --- Borrowing history ------------------------------------------------------
+
+    def borrow_history(self, member_id: str) -> BorrowHistory:
+        """Every loan of a member, returned or not, as a linked list, newest first.
+
+        Built from the loans each time it is asked for, so it can never disagree
+        with the repository (an undone borrow is simply not there any more).
+        """
+        member = self.get_member(member_id)
+        loans = sorted(
+            self._loans.list_for_member(member.member_id),
+            key=lambda loan: (loan.issue_date, loan.loan_id),
+        )
+        history = BorrowHistory()
+        for loan in loans:  # oldest first, so the newest ends up at the head
+            history.insert_at_head(loan.loan_id)
+        return history
 
     # --- Reports ----------------------------------------------------------------
 

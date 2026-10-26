@@ -1,7 +1,9 @@
 from datetime import date
 from types import SimpleNamespace
+from libraryhub.dsa.history import BorrowHistory
 
 from libraryhub.formatters import (
+    format_borrow_history,
     format_borrowed,
     format_catalogue,
     format_days,
@@ -332,4 +334,14 @@ def test_renewed_message():
 def test_waiting_joined_message():
     assert format_waiting_joined(ASHA, ALCHEMIST, 1) == (
         "OK: Asha Raman is #1 on the waiting list for 'The Alchemist'."
+    )
+
+def test_format_borrow_history_matches_the_brief(library_world):
+    member = library_world.library.get_member("M002")  # Rahul Mehta
+    history = BorrowHistory()
+    for loan_id in ("L008", "L007", "L001"):
+        history.insert_at_head(loan_id)
+    assert format_borrow_history(member, history) == (
+        "Borrow history, Rahul Mehta (newest first):\n"
+        "L001 -> L007 -> L008 -> None"
     )
