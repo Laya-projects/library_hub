@@ -47,6 +47,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+UNDO_LIMIT = 20  # how many borrows and returns are remembered
+
 
 # --- Small result objects: data for the menu or the API to show -------------
 
@@ -94,6 +96,27 @@ class OverdueLine:
     fine_so_far: int  # calculated, not stored until the item is returned
 
 
+@dataclass(frozen=True)
+class UndoEntry:
+    """What is needed to reverse one action: IDs and numbers, never live objects."""
+
+    action: str  # "borrow" or "return"
+    loan_id: str
+    member_id: str
+    isbn: str
+    queue_position: int | None = None  # borrow: where they stood in the queue
+    fine: int = 0  # return: the fine that was recorded
+
+
+@dataclass(frozen=True)
+class UndoResult:
+    action: str
+    loan: Loan
+    member: Member
+    item: LibraryItem
+    fine: int
+
+
 class UnpaidFineLine(NamedTuple):
     member: Member
     amount: int
@@ -126,6 +149,12 @@ class Library:
         # lives in memory only and is lost on exit. Phase 3 moves it behind a
         # repository (the reservations table).
         self._waiting: dict[str, deque[str]] = {}
+        # The undo stack: the last borrows and returns, newest on the right.
+        self._undo_stack: deque[UndoEntry] = deque(maxlen=UNDO_LIMIT)  # a stack
+        self._undoers: dict[str, Callable[[UndoEntry], None]] = {
+            "borrow": self._undo_borrow,
+            "return": self._undo_return,
+        }
 
     # --- Looking things up (they raise, so callers never meet None) ----------
 
@@ -255,8 +284,14 @@ class Library:
             )
             self._loans.add(loan)
             queue = self._waiting.get(item.isbn, deque())
-            if member.member_id in queue:
+            position = (
+                queue.index(member.member_id) if member.member_id in queue else None
+            )
+            if position is not None:
                 queue.remove(member.member_id)  # their turn has come
+            self._undo_stack.append(
+                UndoEntry("borrow", loan.loan_id, member.member_id, item.isbn, position)
+            )
             logger.info("Borrow successful: member %s borrowed %s", member_id, isbn)
             return loan
         except LibraryError as err:
@@ -279,6 +314,11 @@ class Library:
                 self._fines.add(Fine(loan.loan_id, fine))
             loan.return_date = today  # last, so a failed fine leaves the loan open
             self._loans.update(loan)  # a database repository only sees this call
+            self._undo_stack.append(
+                UndoEntry(
+                    "return", loan.loan_id, member.member_id, item.isbn, fine=fine
+                )
+            )
             queue = self._waiting.get(item.isbn, deque())
             waiting = [m for i in queue if (m := self._members.get(i)) is not None]
             next_waiting = waiting[0] if waiting else None
@@ -355,6 +395,37 @@ class Library:
         item = self.get_item(isbn)
         queue = self._waiting.get(item.isbn, deque())
         return [self.get_member(member_id) for member_id in queue]
+
+    # --- Undo -------------------------------------------------------------------
+
+    def undo(self) -> UndoResult | None:
+        """Reverse the latest borrow or return. None when there is nothing to undo."""
+        if not self._undo_stack:
+            return None
+        entry = self._undo_stack.pop()  # last in, first out
+        loan = self._loans.get(entry.loan_id)
+        if loan is None:  # the entry is dropped: it can no longer be reversed
+            raise ValidationError(
+                "undo", f"Cannot undo: loan {entry.loan_id} no longer exists."
+            )
+        member = self.get_member(entry.member_id)
+        item = self.get_item(entry.isbn)
+        self._undoers[entry.action](entry)  # dictionary dispatch, no if-chain
+        logger.info("Undo successful: %s of loan %s", entry.action, entry.loan_id)
+        return UndoResult(entry.action, loan, member, item, entry.fine)
+
+    def _undo_borrow(self, entry: UndoEntry) -> None:
+        self._loans.remove(entry.loan_id)
+        if entry.queue_position is not None:  # give them their old place back
+            queue = self._waiting.setdefault(entry.isbn, deque())
+            queue.insert(entry.queue_position, entry.member_id)
+
+    def _undo_return(self, entry: UndoEntry) -> None:
+        loan = self.get_loan(entry.loan_id)
+        if entry.fine > 0:
+            self._fines.remove_for_loan(entry.loan_id)
+        loan.return_date = None  # the loan is open again
+        self._loans.update(loan)
 
     # --- Reports ----------------------------------------------------------------
 

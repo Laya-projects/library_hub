@@ -66,18 +66,19 @@ def test_menu_text_matches_the_brief():
         "6. Join waiting list",
         "7. Member loans",
         "8. Overdue report",
+        "9. Undo last borrow/return",
         "0. Exit",
     ]
 
 
-@pytest.mark.parametrize("bad", ["abc", "", "9", "-1", "1.5", "one", "01", "10"])
+@pytest.mark.parametrize("bad", ["abc", "", "-1", "1.5", "one", "01", "10"])
 def test_invalid_choice_gives_the_error_and_the_loop_continues(library_world, bad):
     transcript = run_menu(library_world.library, [bad, "0"])
     assert transcript == [MENU_TEXT, "> " + bad, INVALID_CHOICE, "> 0"]
 
 
 def test_invalid_choice_message_matches_the_brief():
-    assert INVALID_CHOICE == "Please enter a number from 0 to 8."
+    assert INVALID_CHOICE == "Please enter a number from 0 to 9."
 
 
 def test_choices_are_stripped(library_world):
@@ -325,6 +326,55 @@ def test_option_8_overdue_report_matches_the_brief(library_world):
         "> 0",
     ]
 
+# --- Option 9: undo -------------------------------------------------------------
+
+
+def test_option_9_undoes_a_borrow_and_then_has_nothing_left(library_world):
+    loan = _borrow(library_world, "M001", WINGS_ISBN)
+    transcript = run_menu(library_world.library, ["9", "9", "0"])
+    assert transcript[1:] == [
+        "> 9",
+        f"OK: Undid borrow of 'Wings of Fire' by Asha Raman (loan {loan.loan_id} removed).",
+        "> 9",
+        "Nothing to undo.",
+        "> 0",
+    ]
+
+
+def test_option_9_with_nothing_to_undo(library_world):
+    transcript = run_menu(library_world.library, ["9", "0"])
+    assert transcript == [MENU_TEXT, "> 9", "Nothing to undo.", "> 0"]
+
+
+def test_option_9_undoes_a_return_and_removes_its_fine(library_world):
+    transcript = run_menu(library_world.library, ["4", "L001", "9", "0"])
+    assert transcript[4:] == [
+        "> 9",
+        (
+            "OK: Undid return of 'The Alchemist' by Rahul Mehta "
+            "(loan L001 is open again, fine of ₹100 removed)."
+        ),
+        "> 0",
+    ]
+
+
+def test_option_9_return_without_a_fine_has_no_fine_text(library_world):
+    loan = _borrow(library_world, "M001", WINGS_ISBN)
+    library_world.library.return_item(loan.loan_id, TODAY)  # on time: no fine
+    transcript = run_menu(library_world.library, ["9", "0"])
+    assert transcript[2] == (
+        f"OK: Undid return of 'Wings of Fire' by Asha Raman "
+        f"(loan {loan.loan_id} is open again)."
+    )
+
+
+def test_option_9_reports_a_loan_that_has_gone(library_world):
+    loan = _borrow(library_world, "M001", WINGS_ISBN)
+    library_world.library._loans.remove(loan.loan_id)  # removed behind its back
+    transcript = run_menu(library_world.library, ["9", "0"])
+    assert transcript[2] == (
+        f"ERROR [ValidationError]: Cannot undo: loan {loan.loan_id} no longer exists."
+    )
 
 # --- Errors and leaving cleanly -------------------------------------------------
 
@@ -403,7 +453,7 @@ def test_the_menu_can_run_again_after_it_has_ended(library_world):
 
 def test_actions_are_looked_up_in_a_dictionary(library_world):
     menu = Menu(library_world.library, TODAY, input, print)
-    assert sorted(menu._actions) == ["0", "1", "2", "3", "4", "5", "6", "7", "8"]
+    assert sorted(menu._actions) == ["0", "1", "2", "3", "4", "5", "6", "7", "8","9"]
 
 
 def test_menu_uses_the_library_and_not_the_rules():

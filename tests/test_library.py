@@ -766,3 +766,66 @@ def test_the_second_in_line_cannot_jump_the_queue(library_world):
         library.borrow("M001", ALCHEMIST, TODAY)  # second in line, one free copy
     library.borrow("M005", ALCHEMIST, TODAY)  # first in line gets it
     assert [m.member_id for m in library.waiting_list(ALCHEMIST)] == ["M001"]
+
+
+def test_undo_with_nothing_to_undo(library_world):
+    assert library_world.library.undo() is None
+
+
+def test_undo_borrow_removes_the_loan_and_frees_the_copy(library_world):
+    library = library_world.library
+    loan = library.borrow("M001", WINGS, TODAY)
+    assert library.available_copies(WINGS) == 1
+    result = library.undo()
+    assert result.action == "borrow" and result.loan.loan_id == loan.loan_id
+    assert library.available_copies(WINGS) == 2
+    with pytest.raises(LoanNotFoundError):
+        library.get_loan(loan.loan_id)
+
+
+def test_undo_return_reopens_the_loan_and_removes_the_fine(library_world):
+    library = library_world.library
+    before = library.unpaid_fines_for("M002")
+    library.return_item("L001", TODAY)  # 20 days late: a fine is recorded
+    assert library.unpaid_fines_for("M002") > before
+    result = library.undo()
+    assert result.action == "return" and result.fine > 0
+    assert library.get_loan("L001").is_open()
+    assert library.unpaid_fines_for("M002") == before
+    assert library.available_copies(ALCHEMIST) == 0
+
+
+def test_undo_goes_back_one_step_at_a_time(library_world):
+    library = library_world.library
+    loan = library.borrow("M001", WINGS, TODAY)
+    library.return_item(loan.loan_id, TODAY)
+    assert library.undo().action == "return"
+    assert library.undo().action == "borrow"
+    assert library.undo() is None
+
+
+def test_undoing_a_borrow_gives_back_the_place_in_the_queue(library_world):
+    library = library_world.library
+    library.reserve("M005", ALCHEMIST)
+    library.reserve("M001", ALCHEMIST)
+    library.return_item("L001", TODAY)
+    library.borrow("M005", ALCHEMIST, TODAY)  # leaves the queue
+    assert [m.member_id for m in library.waiting_list(ALCHEMIST)] == ["M001"]
+    library.undo()  # undo the borrow
+    assert [m.member_id for m in library.waiting_list(ALCHEMIST)] == ["M005", "M001"]
+
+
+def test_a_refused_borrow_is_not_remembered(library_world):
+    library = library_world.library
+    with pytest.raises(ItemNotAvailableError):
+        library.borrow("M001", ALCHEMIST, TODAY)
+    assert library.undo() is None
+
+
+def test_undo_says_so_when_the_loan_has_gone(library_world):
+    library = library_world.library
+    loan = library.borrow("M001", WINGS, TODAY)
+    library._loans.remove(loan.loan_id)  # removed behind the Library's back
+    with pytest.raises(ValidationError, match="no longer exists"):
+        library.undo()
+    assert library.undo() is None  # the dead entry was dropped
