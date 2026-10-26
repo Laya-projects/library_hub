@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from libraryhub import calculations
 from libraryhub.audit import AuditLog, audit
+from libraryhub.dsa.waiting_queue import WaitingQueue
 from libraryhub.errors import (
     BorrowLimitExceededError,
     DuplicateLoanError,
@@ -104,7 +105,7 @@ class UndoEntry:
     loan_id: str
     member_id: str
     isbn: str
-    queue_position: int | None = None  # borrow: where they stood in the queue
+    queue_position: int | None = None  # borrow: their place in the queue (1 = first)
     fine: int = 0  # return: the fine that was recorded
 
 
@@ -145,10 +146,10 @@ class Library:
         self._loans = loans
         self._fines = fines
         self.audit_log = audit_log if audit_log is not None else AuditLog(clock=clock)
-        # One first-come, first-served queue (a deque) of member IDs per ISBN. It
+        # One first-come, first-served WaitingQueue of member IDs per ISBN. It
         # lives in memory only and is lost on exit. Phase 3 moves it behind a
         # repository (the reservations table).
-        self._waiting: dict[str, deque[str]] = {}
+        self._waiting: dict[str, WaitingQueue] = {}
         # The undo stack: the last borrows and returns, newest on the right.
         self._undo_stack: deque[UndoEntry] = deque(maxlen=UNDO_LIMIT)  # a stack
         self._undoers: dict[str, Callable[[UndoEntry], None]] = {
@@ -225,15 +226,18 @@ class Library:
         open_loans = self._open_loans_of(member.member_id)
         return any(loan.isbn == item.isbn for loan in open_loans)
 
+    def _queue(self, isbn: str) -> WaitingQueue:
+        """The waiting queue of a title, created empty the first time it is used."""
+        return self._waiting.setdefault(isbn, WaitingQueue())
+
     def _place_in_line(self, member: Member, item: LibraryItem) -> int:
         """Where this member stands for a free copy: 1 means first in line.
 
         A queued member keeps their place. Anyone else stands behind the queue.
         """
-        queue = self._waiting.get(item.isbn, deque())
-        if member.member_id in queue:
-            return queue.index(member.member_id) + 1
-        return len(queue) + 1
+        queue = self._queue(item.isbn)
+        place = queue.place_of(member.member_id)
+        return place if place is not None else len(queue) + 1
 
     # --- Borrowing: the checks run in the brief's order -----------------------
 
@@ -283,14 +287,9 @@ class Library:
                 calculations.due_date(today, item, member),
             )
             self._loans.add(loan)
-            queue = self._waiting.get(item.isbn, deque())
-            position = (
-                queue.index(member.member_id) if member.member_id in queue else None
-            )
-            if position is not None:
-                queue.remove(member.member_id)  # their turn has come
+            place = self._queue(item.isbn).leave(member.member_id)  # their turn
             self._undo_stack.append(
-                UndoEntry("borrow", loan.loan_id, member.member_id, item.isbn, position)
+                UndoEntry("borrow", loan.loan_id, member.member_id, item.isbn, place)
             )
             logger.info("Borrow successful: member %s borrowed %s", member_id, isbn)
             return loan
@@ -319,8 +318,11 @@ class Library:
                     "return", loan.loan_id, member.member_id, item.isbn, fine=fine
                 )
             )
-            queue = self._waiting.get(item.isbn, deque())
-            waiting = [m for i in queue if (m := self._members.get(i)) is not None]
+            waiting = [
+                m
+                for queued_id in self._queue(item.isbn)
+                if (m := self._members.get(queued_id)) is not None
+            ]
             next_waiting = waiting[0] if waiting else None
             result = ReturnResult(
                 loan, member, item, days, fine, next_waiting, tuple(waiting[1:])
@@ -351,7 +353,7 @@ class Library:
                 raise RenewalNotAllowedError.limit_reached(
                     item.title, loan.renewals
                 )  # R6
-            if self._waiting.get(item.isbn):
+            if self._queue(item.isbn):  # an empty queue is False
                 raise RenewalNotAllowedError.someone_waiting(item.title)  # R6
             loan.renew(member)
             self._loans.update(loan)
@@ -376,7 +378,7 @@ class Library:
             raise ItemNotBorrowableError(item.title)
         if self._holds_title(member, item):
             raise DuplicateLoanError(member.name, item.title)
-        queue = self._waiting.setdefault(item.isbn, deque())
+        queue = self._queue(item.isbn)
         if member.member_id in queue:
             raise ValidationError(
                 "waiting_list",
@@ -387,14 +389,12 @@ class Library:
                 "waiting_list",
                 f"A copy of '{item.title}' is available. Borrow it instead.",
             )
-        queue.append(member.member_id)
-        return len(queue)
+        return queue.join(member.member_id)
 
     def waiting_list(self, isbn: str) -> list[Member]:
         """Members waiting for this title, first in line first."""
         item = self.get_item(isbn)
-        queue = self._waiting.get(item.isbn, deque())
-        return [self.get_member(member_id) for member_id in queue]
+        return [self.get_member(member_id) for member_id in self._queue(item.isbn)]
 
     # --- Undo -------------------------------------------------------------------
 
@@ -417,8 +417,7 @@ class Library:
     def _undo_borrow(self, entry: UndoEntry) -> None:
         self._loans.remove(entry.loan_id)
         if entry.queue_position is not None:  # give them their old place back
-            queue = self._waiting.setdefault(entry.isbn, deque())
-            queue.insert(entry.queue_position, entry.member_id)
+            self._queue(entry.isbn).rejoin(entry.queue_position, entry.member_id)
 
     def _undo_return(self, entry: UndoEntry) -> None:
         loan = self.get_loan(entry.loan_id)
