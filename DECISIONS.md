@@ -134,6 +134,34 @@ reads the same, but it hides that a fine was removed.
 **Consequences.** If a later phase shows the brief's own wording for this
 case, only `format_undone` and two tests in `test_menu.py` need to change.
 
+## D5: Where does the waiting-queue logic live?
+
+**Context.** Each fully borrowed ISBN needs a first-come, first-served queue of member IDs (R7). Undo must be able to put a member back at their old place.
+
+**Decision.** A `WaitingQueue` class in `dsa/waiting_queue.py` that wraps a `collections.deque`. `Library` calls `join`, `leave`, `place_of` and `rejoin`, and never touches the deque.
+
+**Why.** The queue has its own rules (nobody queued twice, places count from 1, rejoin at a place), and they now live in one class that can be tested alone. Phase 3 moves the queue to a table, so only this class changes.
+
+**Rejected.** Raw deques inside `Library`: less code, but the queue rules end up spread over `borrow`, `reserve` and undo.
+
+## D6: Where does the borrowing history live?
+
+**Context.** The brief wants a singly linked list of a member's loans, newest first.
+
+**Decision.** `Library.borrow_history(member_id)` builds a `BorrowHistory` from the member's loans on every call (oldest first, each inserted at the head).
+
+**Why.** The loan repository stays the only source of truth, so the history cannot disagree with it, and an undone borrow needs no extra code. The cost is O(L log L) for one member's loans, which is small.
+
+**Rejected.** One stored `BorrowHistory` per member: instant to read, but a second copy that every borrow and undo must keep in step.
+
+## D7: What does `count_items` return for an unknown category?
+
+**Decision.** `None`, like `path_to`.
+
+**Why.** `0` would look like a real answer and hide a typo. `None` forces the caller to handle "no such category", and mypy checks it.
+
+**Rejected.** Returning `0`.
+
 ## Phase 3: Database
 
 (Entries to be added in Phase 3.)
