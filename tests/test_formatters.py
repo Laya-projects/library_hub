@@ -1,7 +1,7 @@
 from datetime import date
 from types import SimpleNamespace
-from libraryhub.dsa.history import BorrowHistory
 
+from libraryhub.dsa.history import BorrowHistory
 from libraryhub.formatters import (
     format_borrow_history,
     format_borrowed,

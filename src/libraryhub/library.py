@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from libraryhub import calculations
 from libraryhub.audit import AuditLog, audit
+from libraryhub.dsa.categories import build_tree_from_categories
 from libraryhub.dsa.history import BorrowHistory
 from libraryhub.dsa.waiting_queue import WaitingQueue
 from libraryhub.errors import (
@@ -38,6 +39,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from datetime import date, datetime
 
+    from libraryhub.dsa.categories import CategoryNode
     from libraryhub.items import LibraryItem
     from libraryhub.members import Member
     from libraryhub.repositories import (
@@ -487,6 +489,12 @@ class Library:
     def category_report(self) -> dict[str, list[str]]:
         """Alias for items_by_category."""
         return self.items_by_category()
+
+    def category_tree(self) -> CategoryNode:
+        """The categories as a tree: Library at the top, every item counted once."""
+        return build_tree_from_categories(
+            item.category for item in self._items.list_all()
+        )
 
     def members_with_unpaid_fines(self) -> list[UnpaidFineLine]:
         """Members with unpaid fines > 0, largest amount first, ties by name."""
