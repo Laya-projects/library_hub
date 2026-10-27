@@ -167,3 +167,77 @@ See [DECISIONS.md](DECISIONS.md) for the choices made in this phase and why.
 | R8 | A member cannot hold two copies of the same title | `Library._check_no_duplicate`, `DuplicateLoanError` | TODO |
 | R9 | An ISBN is exactly 13 digits | `items.validate_isbn`, `InvalidISBNError` | TODO |
 | R10 | Returning on the due date is not late | `Loan.days_late` | TODO |
+
+
+
+## Phase 2: data structures
+
+Phase 2 swaps lists and loops for structures chosen on purpose, and measures the
+result. The rules R1 to R10 and every Phase 1 sample are unchanged.
+
+### What was added
+
+| Feature | Structure | File | Why (see DECISIONS.md) | Tests |
+|---|---|---|---|---|
+| Find an item by title or ISBN | linear search and binary search | `dsa/search.py` | D__ | `tests/test_search.py` |
+| Sort the catalogue and reports | bubble, insertion, selection (hand-written) and `sorted(key=)` | `dsa/sorting.py` | D15, D__ | `tests/test_sorting.py` |
+| Look up items and members by ID | hash table | `dsa/hashing.py` | D__ | `tests/test_hashing.py` |
+| Undo the last borrow or return | stack (`deque`, last 20 actions) | `library.py` (`undo`) | D19, D20 | `tests/test_library.py`, `tests/test_menu.py` |
+| Waiting list | queue (`WaitingQueue` on a `deque`) | `dsa/waiting_queue.py` | D21 | `tests/test_waiting_queue.py` |
+| Borrowing history | singly linked list | `dsa/history.py` | D22 | `tests/test_history.py` |
+| Category tree and counts | tree with recursive walks | `dsa/categories.py` | D23 | `tests/test_categories.py` |
+| Recursion warm-ups | factorial, fibonacci, digit sum, recursive binary search | `dsa/recursion.py` | | `tests/test_recursion.py` |
+| Big test data | fake book generator | `dsa/fake_books.py` | | `tests/test_fake_books.py` |
+
+### Menu change
+
+Option `9. Undo last borrow/return` reverses the latest borrow or return (up to the
+last 20 actions). It prints `Nothing to undo.` when there is nothing left.
+
+### Benchmarks
+
+```
+python benchmarks.py                 # everything (hand-written sorts at 10,000 take minutes)
+python benchmarks.py --quick         # hand-written sorts only up to 5,000
+python benchmarks.py --only audit    # or: sorts, queue
+```
+
+The full report, with predicted against measured Big-O, is in
+[docs/benchmarks.md](docs/benchmarks.md). Headlines:
+
+- At 10,000 books, `sorted(key=)` is about 830 times faster than insertion sort.
+- At 10,000 books, binary search takes about 0.003 ms against about 1 ms for linear search.
+- `borrow` and `return_item` grow in a straight line with the number of loans.
+
+### Checks
+
+```
+python -m ruff check .
+python -m mypy src
+python -m pytest --cov=libraryhub --cov-report=term-missing
+```
+
+## What this adds
+
+- `dsa/` package: search, sorting, hashing, linked-list history, category tree,
+  recursion, waiting queue, fake-data generator.
+- Undo stack in `Library`, and menu option 9 (`Undo last borrow/return`).
+- `WaitingQueue` replaces the raw deques of the waiting list.
+- `benchmarks.py` and `docs/benchmarks.md` (predicted against measured Big-O).
+
+## How to check
+
+    python -m ruff check .
+    python -m mypy src
+    python -m pytest --cov=libraryhub --cov-report=term-missing
+
+## Checklist
+
+- [ ] ruff and mypy clean
+- [ ] all tests pass (Phase 1 tests unchanged and green)
+- [ ] coverage 90% or more
+- [ ] menu samples reproduce (`tests/test_golden.py`)
+- [ ] waiting list is first come, first served
+- [ ] undo works for borrow and return
+- [ ] Dockerfile and Jenkinsfile unchanged and still working
+- [ ] README and DECISIONS.md updated
