@@ -1,7 +1,9 @@
 from datetime import date
 from types import SimpleNamespace
 
+from libraryhub.dsa.history import BorrowHistory
 from libraryhub.formatters import (
+    format_borrow_history,
     format_borrowed,
     format_catalogue,
     format_days,
@@ -13,6 +15,7 @@ from libraryhub.formatters import (
     format_search_results,
     format_table,
     format_waiting_joined,
+    format_waiting_list,
 )
 from libraryhub.items import Book
 from libraryhub.library import LoanLine, MemberLoans
@@ -258,13 +261,29 @@ ASHA = SimpleNamespace(name="Asha Raman")
 ALCHEMIST = SimpleNamespace(title="The Alchemist")
 
 
-def _returned(days_late, fine, next_waiting=None):
+def _returned(days_late, fine, next_waiting=None, still_waiting=()):
     return SimpleNamespace(
         member=SimpleNamespace(name="Rahul Mehta"),
         item=ALCHEMIST,
         days_late=days_late,
         fine=fine,
         next_waiting=next_waiting,
+        still_waiting=still_waiting,
+    )
+
+
+def test_returned_lists_who_is_still_waiting():
+    sneha = SimpleNamespace(name="Sneha Iyer")
+    text = format_returned(_returned(20, 100, next_waiting=sneha, still_waiting=(ASHA,)))
+    assert text.splitlines()[-2:] == [
+        "Next on waiting list: Sneha Iyer.",
+        "Waiting list for 'The Alchemist': Asha Raman",
+    ]
+
+
+def test_waiting_list_line_names_everyone_in_order():
+    assert format_waiting_list(ALCHEMIST, [SimpleNamespace(name="Sneha Iyer"), ASHA]) == (
+        "Waiting list for 'The Alchemist': Sneha Iyer, Asha Raman"
     )
 
 
@@ -315,4 +334,14 @@ def test_renewed_message():
 def test_waiting_joined_message():
     assert format_waiting_joined(ASHA, ALCHEMIST, 1) == (
         "OK: Asha Raman is #1 on the waiting list for 'The Alchemist'."
+    )
+
+def test_format_borrow_history_matches_the_brief(library_world):
+    member = library_world.library.get_member("M002")  # Rahul Mehta
+    history = BorrowHistory()
+    for loan_id in ("L008", "L007", "L001"):
+        history.insert_at_head(loan_id)
+    assert format_borrow_history(member, history) == (
+        "Borrow history, Rahul Mehta (newest first):\n"
+        "L001 -> L007 -> L008 -> None"
     )

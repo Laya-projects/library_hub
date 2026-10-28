@@ -9,11 +9,15 @@ the menu or the API decides how to show it.
 from __future__ import annotations
 
 import logging
+from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, NamedTuple
 
 from libraryhub import calculations
 from libraryhub.audit import AuditLog, audit
+from libraryhub.dsa.categories import build_tree_from_categories
+from libraryhub.dsa.history import BorrowHistory
+from libraryhub.dsa.waiting_queue import WaitingQueue
 from libraryhub.errors import (
     BorrowLimitExceededError,
     DuplicateLoanError,
@@ -35,6 +39,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from datetime import date, datetime
 
+    from libraryhub.dsa.categories import CategoryNode
     from libraryhub.items import LibraryItem
     from libraryhub.members import Member
     from libraryhub.repositories import (
@@ -45,6 +50,8 @@ if TYPE_CHECKING:
     )
 
 logger = logging.getLogger(__name__)
+
+UNDO_LIMIT = 20  # how many borrows and returns are remembered
 
 
 # --- Small result objects: data for the menu or the API to show -------------
@@ -58,6 +65,7 @@ class ReturnResult:
     days_late: int
     fine: int
     next_waiting: Member | None  # first member in the waiting list, if any
+    still_waiting: tuple[Member, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -92,6 +100,27 @@ class OverdueLine:
     fine_so_far: int  # calculated, not stored until the item is returned
 
 
+@dataclass(frozen=True)
+class UndoEntry:
+    """What is needed to reverse one action: IDs and numbers, never live objects."""
+
+    action: str  # "borrow" or "return"
+    loan_id: str
+    member_id: str
+    isbn: str
+    queue_position: int | None = None  # borrow: their place in the queue (1 = first)
+    fine: int = 0  # return: the fine that was recorded
+
+
+@dataclass(frozen=True)
+class UndoResult:
+    action: str
+    loan: Loan
+    member: Member
+    item: LibraryItem
+    fine: int
+
+
 class UnpaidFineLine(NamedTuple):
     member: Member
     amount: int
@@ -120,10 +149,16 @@ class Library:
         self._loans = loans
         self._fines = fines
         self.audit_log = audit_log if audit_log is not None else AuditLog(clock=clock)
-        # One first-come, first-served queue of member IDs per ISBN. It lives in
-        # memory only and is lost on exit. Phase 3 moves it behind a repository
-        # (the reservations table).
-        self._waiting: dict[str, list[str]] = {}
+        # One first-come, first-served WaitingQueue of member IDs per ISBN. It
+        # lives in memory only and is lost on exit. Phase 3 moves it behind a
+        # repository (the reservations table).
+        self._waiting: dict[str, WaitingQueue] = {}
+        # The undo stack: the last borrows and returns, newest on the right.
+        self._undo_stack: deque[UndoEntry] = deque(maxlen=UNDO_LIMIT)  # a stack
+        self._undoers: dict[str, Callable[[UndoEntry], None]] = {
+            "borrow": self._undo_borrow,
+            "return": self._undo_return,
+        }
 
     # --- Looking things up (they raise, so callers never meet None) ----------
 
@@ -194,15 +229,18 @@ class Library:
         open_loans = self._open_loans_of(member.member_id)
         return any(loan.isbn == item.isbn for loan in open_loans)
 
+    def _queue(self, isbn: str) -> WaitingQueue:
+        """The waiting queue of a title, created empty the first time it is used."""
+        return self._waiting.setdefault(isbn, WaitingQueue())
+
     def _place_in_line(self, member: Member, item: LibraryItem) -> int:
         """Where this member stands for a free copy: 1 means first in line.
 
         A queued member keeps their place. Anyone else stands behind the queue.
         """
-        queue = self._waiting.get(item.isbn, [])
-        if member.member_id in queue:
-            return queue.index(member.member_id) + 1
-        return len(queue) + 1
+        queue = self._queue(item.isbn)
+        place = queue.place_of(member.member_id)
+        return place if place is not None else len(queue) + 1
 
     # --- Borrowing: the checks run in the brief's order -----------------------
 
@@ -252,9 +290,10 @@ class Library:
                 calculations.due_date(today, item, member),
             )
             self._loans.add(loan)
-            queue = self._waiting.get(item.isbn, [])
-            if member.member_id in queue:
-                queue.remove(member.member_id)  # their turn has come
+            place = self._queue(item.isbn).leave(member.member_id)  # their turn
+            self._undo_stack.append(
+                UndoEntry("borrow", loan.loan_id, member.member_id, item.isbn, place)
+            )
             logger.info("Borrow successful: member %s borrowed %s", member_id, isbn)
             return loan
         except LibraryError as err:
@@ -277,9 +316,20 @@ class Library:
                 self._fines.add(Fine(loan.loan_id, fine))
             loan.return_date = today  # last, so a failed fine leaves the loan open
             self._loans.update(loan)  # a database repository only sees this call
-            queue = self._waiting.get(item.isbn, [])
-            next_waiting = self._members.get(queue[0]) if queue else None
-            result = ReturnResult(loan, member, item, days, fine, next_waiting)
+            self._undo_stack.append(
+                UndoEntry(
+                    "return", loan.loan_id, member.member_id, item.isbn, fine=fine
+                )
+            )
+            waiting = [
+                m
+                for queued_id in self._queue(item.isbn)
+                if (m := self._members.get(queued_id)) is not None
+            ]
+            next_waiting = waiting[0] if waiting else None
+            result = ReturnResult(
+                loan, member, item, days, fine, next_waiting, tuple(waiting[1:])
+            )
             logger.info("Return successful: loan %s returned", loan_id)
             return result
         except LibraryError as err:
@@ -306,7 +356,7 @@ class Library:
                 raise RenewalNotAllowedError.limit_reached(
                     item.title, loan.renewals
                 )  # R6
-            if self._waiting.get(item.isbn):
+            if self._queue(item.isbn):  # an empty queue is False
                 raise RenewalNotAllowedError.someone_waiting(item.title)  # R6
             loan.renew(member)
             self._loans.update(loan)
@@ -331,7 +381,7 @@ class Library:
             raise ItemNotBorrowableError(item.title)
         if self._holds_title(member, item):
             raise DuplicateLoanError(member.name, item.title)
-        queue = self._waiting.setdefault(item.isbn, [])
+        queue = self._queue(item.isbn)
         if member.member_id in queue:
             raise ValidationError(
                 "waiting_list",
@@ -342,8 +392,60 @@ class Library:
                 "waiting_list",
                 f"A copy of '{item.title}' is available. Borrow it instead.",
             )
-        queue.append(member.member_id)
-        return len(queue)
+        return queue.join(member.member_id)
+
+    def waiting_list(self, isbn: str) -> list[Member]:
+        """Members waiting for this title, first in line first."""
+        item = self.get_item(isbn)
+        return [self.get_member(member_id) for member_id in self._queue(item.isbn)]
+
+    # --- Undo -------------------------------------------------------------------
+
+    def undo(self) -> UndoResult | None:
+        """Reverse the latest borrow or return. None when there is nothing to undo."""
+        if not self._undo_stack:
+            return None
+        entry = self._undo_stack.pop()  # last in, first out
+        loan = self._loans.get(entry.loan_id)
+        if loan is None:  # the entry is dropped: it can no longer be reversed
+            raise ValidationError(
+                "undo", f"Cannot undo: loan {entry.loan_id} no longer exists."
+            )
+        member = self.get_member(entry.member_id)
+        item = self.get_item(entry.isbn)
+        self._undoers[entry.action](entry)  # dictionary dispatch, no if-chain
+        logger.info("Undo successful: %s of loan %s", entry.action, entry.loan_id)
+        return UndoResult(entry.action, loan, member, item, entry.fine)
+
+    def _undo_borrow(self, entry: UndoEntry) -> None:
+        self._loans.remove(entry.loan_id)
+        if entry.queue_position is not None:  # give them their old place back
+            self._queue(entry.isbn).rejoin(entry.queue_position, entry.member_id)
+
+    def _undo_return(self, entry: UndoEntry) -> None:
+        loan = self.get_loan(entry.loan_id)
+        if entry.fine > 0:
+            self._fines.remove_for_loan(entry.loan_id)
+        loan.return_date = None  # the loan is open again
+        self._loans.update(loan)
+
+    # --- Borrowing history ------------------------------------------------------
+
+    def borrow_history(self, member_id: str) -> BorrowHistory:
+        """Every loan of a member, returned or not, as a linked list, newest first.
+
+        Built from the loans each time it is asked for, so it can never disagree
+        with the repository (an undone borrow is simply not there any more).
+        """
+        member = self.get_member(member_id)
+        loans = sorted(
+            self._loans.list_for_member(member.member_id),
+            key=lambda loan: (loan.issue_date, loan.loan_id),
+        )
+        history = BorrowHistory()
+        for loan in loans:  # oldest first, so the newest ends up at the head
+            history.insert_at_head(loan.loan_id)
+        return history
 
     # --- Reports ----------------------------------------------------------------
 
@@ -387,6 +489,12 @@ class Library:
     def category_report(self) -> dict[str, list[str]]:
         """Alias for items_by_category."""
         return self.items_by_category()
+
+    def category_tree(self) -> CategoryNode:
+        """The categories as a tree: Library at the top, every item counted once."""
+        return build_tree_from_categories(
+            item.category for item in self._items.list_all()
+        )
 
     def members_with_unpaid_fines(self) -> list[UnpaidFineLine]:
         """Members with unpaid fines > 0, largest amount first, ties by name."""

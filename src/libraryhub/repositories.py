@@ -92,6 +92,10 @@ class LoanRepository(ABC):
     def list_for_isbn(self, isbn: str) -> list[Loan]:
         """Every loan of one title."""
 
+    @abstractmethod
+    def remove(self, loan_id: str) -> None:
+        """Delete a loan. Used only to undo a borrow."""
+
 
 class FineRepository(ABC):
     @abstractmethod
@@ -101,6 +105,10 @@ class FineRepository(ABC):
     @abstractmethod
     def list_all(self) -> list[Fine]:
         """Every fine, paid and unpaid."""
+
+    @abstractmethod
+    def remove_for_loan(self, loan_id: str) -> None:
+        """Delete the fine recorded for this loan, if any. Used to undo a return."""
 
 
 # --- In-memory versions ------------------------------------------------------
@@ -187,6 +195,12 @@ class InMemoryLoanRepository(LoanRepository):
     def list_for_isbn(self, isbn: str) -> list[Loan]:
         return [loan for loan in self._loans if loan.isbn == isbn]
 
+    def remove(self, loan_id: str) -> None:
+        for index, loan in enumerate(self._loans):
+            if loan.loan_id == loan_id:
+                del self._loans[index]
+                return
+        raise LoanNotFoundError(loan_id)
 
 class InMemoryFineRepository(FineRepository):
     def __init__(self) -> None:
@@ -201,3 +215,6 @@ class InMemoryFineRepository(FineRepository):
 
     def list_all(self) -> list[Fine]:
         return list(self._fines)
+    
+    def remove_for_loan(self, loan_id: str) -> None:
+        self._fines = [fine for fine in self._fines if fine.loan_id != loan_id]

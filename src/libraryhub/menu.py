@@ -18,6 +18,7 @@ from libraryhub.formatters import (
     format_renewed,
     format_returned,
     format_search_results,
+    format_undone,
     format_waiting_joined,
 )
 
@@ -38,10 +39,11 @@ MENU_TEXT = """=== LibraryHub Mini ===
 6. Join waiting list
 7. Member loans
 8. Overdue report
+9. Undo last borrow/return
 0. Exit"""
 
 PROMPT = "> "
-INVALID_CHOICE = "Please enter a number from 0 to 8."
+INVALID_CHOICE = "Please enter a number from 0 to 9."
 JOIN_QUESTION = "Join the waiting list? (y/n): "
 
 
@@ -68,6 +70,7 @@ class Menu:
             "6": self._join_waiting_list,
             "7": self._member_loans,
             "8": self._overdue_report,
+            "9": self._undo,
             "0": self._exit,
         }
 
@@ -173,6 +176,11 @@ class Menu:
     def _overdue_report(self) -> None:
         report = self._library.overdue_report(self._today)
         self._output(format_overdue_report(report, self._today))
+
+    # --- Option 9: undo ----------------------------------------------------------------
+
+    def _undo(self) -> None:
+        self._output(format_undone(self._library.undo()))
 
     # --- Option 0 -----------------------------------------------------------------------
 
