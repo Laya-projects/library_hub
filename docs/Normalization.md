@@ -2,7 +2,7 @@
 
 ## 1. The flat file
 
-`data/library_flat.csv` has one row per loan (10 rows) and 16 columns. Member, item,
+`library_flat.csv` has one row per loan (10 rows) and 16 columns. Member, item,
 category and fine details are all copied onto every loan row.
 
 ## 2. Three anomalies in the flat file
@@ -96,7 +96,7 @@ depends on only part of the key.
 | `item_authors` | `(isbn, author_id)` | links items and authors |
 | `loans` | `loan_id` | member_id, isbn, issue_date, due_date, return_date |
 | `fines` | `loan_id` | amount, paid |
-| `reservations` | `(isbn, member_id)` | position or created time (waiting list) |
+| `reservations` | `reservation_id` | isbn, member_id, `UNIQUE (isbn, member_id)`. The ID gives first come, first served |
 | `audit_log` | `log_id` | action, details, time |
 
 `reservations` and `audit_log` do not come from the flat file. They are added for
