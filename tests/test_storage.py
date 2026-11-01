@@ -358,3 +358,16 @@ def test_no_sql_is_built_with_string_formatting():
         text = source.read_text(encoding="utf-8")
         for bad in ('f"SELECT', 'f"INSERT', 'f"UPDATE', 'f"DELETE', ".format(", "% ("):
             assert bad not in text, f"{source.name} builds SQL from text: {bad}"
+
+def test_a_fine_marked_paid_and_updated_stays_paid(library_world):
+    fines = library_world.fines
+    fine = next(f for f in fines.list_all() if not f.paid)
+    fine.paid = True
+    fines.update(fine)
+    stored = next(f for f in fines.list_all() if f.loan_id == fine.loan_id)
+    assert stored.paid is True
+
+
+def test_updating_a_fine_that_does_not_exist_is_refused(library_world):
+    with pytest.raises(ValidationError, match="No fine exists"):
+        library_world.fines.update(Fine("L999", 10))

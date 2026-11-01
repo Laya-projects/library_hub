@@ -64,6 +64,21 @@ class Member(ABC):
             f"name={self.name!r}, email={self.email!r})"
         )
 
+    def __eq__(self, other: object) -> bool:
+        """Same kind of member with the same data. A database builds a new object
+        on every read, so equal members must not depend on being the same object."""
+        if not isinstance(other, Member):
+            return NotImplemented
+        return (
+            type(self) is type(other)
+            and self.member_id == other.member_id
+            and self.name == other.name
+            and self.email == other.email
+        )
+
+    def __hash__(self) -> int:
+        return hash((type(self).__name__, self.member_id))
+
 
 class StudentMember(Member):
     def borrow_limit(self) -> int:

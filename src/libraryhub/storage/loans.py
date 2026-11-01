@@ -144,3 +144,13 @@ class SqliteFineRepository(FineRepository):
 
     def remove_for_loan(self, loan_id: str) -> None:
         self._db.execute("DELETE FROM fines WHERE loan_id = ?", (loan_id,))
+
+    def update(self, fine: Fine) -> None:
+        cursor = self._db.execute(
+            "UPDATE fines SET amount = ?, paid = ? WHERE loan_id = ?",
+            (fine.amount, 1 if fine.paid else 0, fine.loan_id),
+        )
+        if cursor.rowcount == 0:
+            raise ValidationError(
+                "loan_id", f"No fine exists for loan {fine.loan_id}."
+            )
