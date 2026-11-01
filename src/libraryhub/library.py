@@ -34,6 +34,7 @@ from libraryhub.errors import (
 )
 from libraryhub.items import validate_isbn
 from libraryhub.loans import Fine, Loan
+from libraryhub.unit_of_work import NullUnitOfWork
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -48,6 +49,7 @@ if TYPE_CHECKING:
         LoanRepository,
         MemberRepository,
     )
+    from libraryhub.unit_of_work import UnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -143,12 +145,18 @@ class Library:
         fines: FineRepository,
         audit_log: AuditLog | None = None,
         clock: Callable[[], datetime] | None = None,
+        unit_of_work: UnitOfWork | None = None,
     ) -> None:
         self._items = items
         self._members = members
         self._loans = loans
         self._fines = fines
         self.audit_log = audit_log if audit_log is not None else AuditLog(clock=clock)
+        # Each business operation runs inside one transaction. With in-memory
+        # repositories there is nothing to undo, so the default does nothing.
+        self._unit_of_work = (
+            unit_of_work if unit_of_work is not None else NullUnitOfWork()
+        )
         # One first-come, first-served WaitingQueue of member IDs per ISBN. It
         # lives in memory only and is lost on exit. Phase 3 moves it behind a
         # repository (the reservations table).
@@ -279,18 +287,22 @@ class Library:
     @audit("borrow")
     def borrow(self, member_id: str, isbn: str, today: date) -> Loan:
         try:
-            member = self.get_member(member_id)
-            item = self.get_item(isbn)
-            for check in self._borrow_checks():
-                check(member, item)  # the first broken rule raises, the rest never run
-            loan = Loan(
-                member.member_id,
-                item.isbn,
-                today,
-                calculations.due_date(today, item, member),
-            )
-            self._loans.add(loan)
-            place = self._queue(item.isbn).leave(member.member_id)  # their turn
+            with self._unit_of_work.transaction():
+                member = self.get_member(member_id)
+                item = self.get_item(isbn)
+                for check in self._borrow_checks():
+                    check(member, item)  # the first broken rule raises, the rest never run
+                loan = Loan(
+                    member.member_id,
+                    item.isbn,
+                    today,
+                    calculations.due_date(today, item, member),
+                )
+                self._loans.add(loan)
+                place = self._queue(item.isbn).place_of(member.member_id)
+            # Saved. Only now change what lives in memory, so a rollback leaves it alone.
+            if place is not None:
+                self._queue(item.isbn).leave(member.member_id)  # their turn has come
             self._undo_stack.append(
                 UndoEntry("borrow", loan.loan_id, member.member_id, item.isbn, place)
             )
@@ -307,15 +319,17 @@ class Library:
     @audit("return")
     def return_item(self, loan_id: str, today: date) -> ReturnResult:
         try:
-            loan = self._get_open_loan(loan_id)
-            member = self.get_member(loan.member_id)
-            item = self.get_item(loan.isbn)
-            days = loan.days_late(today)
-            fine = loan.fine(today, member, item)
-            if fine > 0:
-                self._fines.add(Fine(loan.loan_id, fine))
-            loan.return_date = today  # last, so a failed fine leaves the loan open
-            self._loans.update(loan)  # a database repository only sees this call
+            with self._unit_of_work.transaction():
+                loan = self._get_open_loan(loan_id)
+                member = self.get_member(loan.member_id)
+                item = self.get_item(loan.isbn)
+                days = loan.days_late(today)
+                fine = loan.fine(today, member, item)
+                if fine > 0:
+                    self._fines.add(Fine(loan.loan_id, fine))
+                loan.return_date = today  # last, so a failed fine leaves the loan open
+                self._loans.update(loan)  # a database repository only sees this call
+            # Saved. Only now remember it for undo and look at the waiting list.
             self._undo_stack.append(
                 UndoEntry(
                     "return", loan.loan_id, member.member_id, item.isbn, fine=fine
@@ -347,19 +361,20 @@ class Library:
         borrow, return_item and renew are called the same way.
         """
         try:
-            loan = self._get_open_loan(loan_id)
-            member = self.get_member(loan.member_id)
-            item = self.get_item(loan.isbn)
-            if item.max_renewals() == 0:
-                raise RenewalNotAllowedError.magazine()  # R2
-            if loan.renewals >= item.max_renewals():
-                raise RenewalNotAllowedError.limit_reached(
-                    item.title, loan.renewals
-                )  # R6
-            if self._queue(item.isbn):  # an empty queue is False
-                raise RenewalNotAllowedError.someone_waiting(item.title)  # R6
-            loan.renew(member)
-            self._loans.update(loan)
+            with self._unit_of_work.transaction():
+                loan = self._get_open_loan(loan_id)
+                member = self.get_member(loan.member_id)
+                item = self.get_item(loan.isbn)
+                if item.max_renewals() == 0:
+                    raise RenewalNotAllowedError.magazine()  # R2
+                if loan.renewals >= item.max_renewals():
+                    raise RenewalNotAllowedError.limit_reached(
+                        item.title, loan.renewals
+                    )  # R6
+                if self._queue(item.isbn):  # an empty queue is False
+                    raise RenewalNotAllowedError.someone_waiting(item.title)  # R6
+                loan.renew(member)
+                self._loans.update(loan)
             result = RenewResult(
                 loan, item, loan.renewals, item.max_renewals(), loan.due_date
             )
@@ -405,15 +420,18 @@ class Library:
         """Reverse the latest borrow or return. None when there is nothing to undo."""
         if not self._undo_stack:
             return None
-        entry = self._undo_stack.pop()  # last in, first out
-        loan = self._loans.get(entry.loan_id)
-        if loan is None:  # the entry is dropped: it can no longer be reversed
-            raise ValidationError(
-                "undo", f"Cannot undo: loan {entry.loan_id} no longer exists."
-            )
-        member = self.get_member(entry.member_id)
-        item = self.get_item(entry.isbn)
-        self._undoers[entry.action](entry)  # dictionary dispatch, no if-chain
+        entry = self._undo_stack[-1]  # last in, first out: look first, remove when done
+        with self._unit_of_work.transaction():
+            loan = self._loans.get(entry.loan_id)
+            if loan is None:  # the entry is dropped: it can no longer be reversed
+                self._undo_stack.pop()
+                raise ValidationError(
+                    "undo", f"Cannot undo: loan {entry.loan_id} no longer exists."
+                )
+            member = self.get_member(entry.member_id)
+            item = self.get_item(entry.isbn)
+            self._undoers[entry.action](entry)  # dictionary dispatch, no if-chain
+        self._undo_stack.pop()  # it worked, so the entry is used up
         logger.info("Undo successful: %s of loan %s", entry.action, entry.loan_id)
         return UndoResult(entry.action, loan, member, item, entry.fine)
 

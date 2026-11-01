@@ -22,9 +22,10 @@ SCHEMA_PATH = Path(__file__).resolve().parents[3] / "sql" / "schema.sql"
 # The membership limits live in the member classes. The table is filled from
 # them, so the numbers are written in one place only.
 _MEMBER_CLASSES = (StudentMember, RegularMember, PremiumMember)
+from libraryhub.unit_of_work import UnitOfWork
 
 
-class Database:
+class Database(UnitOfWork):
     def __init__(
         self,
         path: str | Path = ":memory:",
@@ -82,24 +83,30 @@ class Database:
     def transaction(self) -> Iterator[None]:
         """Commit when the block ends normally, roll back when it raises.
 
-        Blocks can be nested. Only the outermost one begins and ends the real
-        transaction, so a repository method that uses `transaction()` joins the
-        business operation that called it.
+        Blocks can be nested. The outermost one is the real transaction; inner
+        ones are savepoints, so an inner failure that is caught undoes only the
+        inner part, and the outer block carries on.
         """
-        if self._depth == 0:
-            self._connection.execute("BEGIN")
+        outermost = self._depth == 0
+        savepoint = f"unit_{self._depth}"
+        self._connection.execute("BEGIN" if outermost else f"SAVEPOINT {savepoint}")
         self._depth += 1
         try:
             yield
         except BaseException:
             self._depth -= 1
-            if self._depth == 0:
+            if outermost:
                 self._connection.execute("ROLLBACK")
+            else:
+                self._connection.execute(f"ROLLBACK TO {savepoint}")
+                self._connection.execute(f"RELEASE {savepoint}")
             raise
-        else:
-            self._depth -= 1
-            if self._depth == 0:
-                self._connection.execute("COMMIT")
+        self._depth -= 1
+        self._connection.execute("COMMIT" if outermost else f"RELEASE {savepoint}")
+
+    @property
+    def in_transaction(self) -> bool:
+        return self._connection.in_transaction    
 
     def close(self) -> None:
         self._connection.close()
