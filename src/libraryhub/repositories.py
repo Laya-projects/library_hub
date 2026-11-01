@@ -202,6 +202,7 @@ class InMemoryLoanRepository(LoanRepository):
                 return
         raise LoanNotFoundError(loan_id)
 
+
 class InMemoryFineRepository(FineRepository):
     def __init__(self) -> None:
         self._fines: list[Fine] = []
@@ -215,6 +216,6 @@ class InMemoryFineRepository(FineRepository):
 
     def list_all(self) -> list[Fine]:
         return list(self._fines)
-    
+
     def remove_for_loan(self, loan_id: str) -> None:
         self._fines = [fine for fine in self._fines if fine.loan_id != loan_id]
