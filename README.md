@@ -16,17 +16,18 @@ the same database.
 ## Contents
 
 1. [Quick start](#quick-start)
-2. [Configuration](#configuration)
-3. [The console menu](#the-console-menu)
-4. [The website](#the-website)
-5. [The HTTP API](#the-http-api)
-6. [Project layout](#project-layout)
-7. [Business rules](#business-rules)
-8. [What each phase added](#what-each-phase-added)
-9. [Tests and checks](#tests-and-checks)
-10. [Documentation index](#documentation-index)
-11. [Future work](#future-work)
-12. [Troubleshooting](#troubleshooting)
+2. [Preview](#preview)
+3. [Configuration](#configuration)
+4. [The console menu](#the-console-menu)
+5. [The website](#the-website)
+6. [The HTTP API](#the-http-api)
+7. [Project layout](#project-layout)
+8. [Business rules](#business-rules)
+9. [What each phase added](#what-each-phase-added)
+10. [Tests and checks](#tests-and-checks)
+11. [Documentation index](#documentation-index)
+12. [Future work](#future-work)
+13. [Troubleshooting](#troubleshooting)
 
 
 ---
@@ -120,6 +121,25 @@ that the database is the source of truth. To start again from the starter data,
 delete `library.db`.
 
 ---
+
+## Preview 📸
+
+<img width="1874" height="877" alt="image" src="https://github.com/user-attachments/assets/358ef647-03b4-4882-962e-34605bbc5b49" />
+
+<img width="1900" height="876" alt="image" src="https://github.com/user-attachments/assets/0c14df5c-8992-473e-9991-3b6490ee66eb" />
+
+<img width="1899" height="778" alt="image" src="https://github.com/user-attachments/assets/267b7e1f-6ed8-425e-989a-f8f06ee7ac3b" />
+
+<img width="1875" height="877" alt="image" src="https://github.com/user-attachments/assets/ead9f42e-4ade-4502-823b-df3178735789" />
+
+Say we are adding a new book to the library -"Hopeless" :
+
+<img width="1873" height="874" alt="image" src="https://github.com/user-attachments/assets/a05d5ebd-84ed-4bd0-be1e-45dc9feb46d1" />
+
+ And it is visible in catalogue:
+
+ <img width="1861" height="861" alt="image" src="https://github.com/user-attachments/assets/015128a7-5ffb-44e7-8bf2-6a6d0c3581d8" />
+
 
 ## Configuration
 
