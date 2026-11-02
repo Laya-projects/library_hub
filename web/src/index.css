@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@layer base {
+
+  /* ~5:1 on white. The old amber #f59e0b was only ~2:1. */
+  :focus-visible {
+    outline: 3px solid #6d28d9;
+    outline-offset: 2px;
+  }
+
+  h1 {
+    margin-bottom: 1rem;
+    font-size: 1.5rem;
+    font-weight: 700;
+  }
+}

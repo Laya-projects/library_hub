@@ -33,7 +33,12 @@ class Database(UnitOfWork):
     ) -> None:
         # isolation_level=None: Python never opens a transaction by itself, so
         # BEGIN, COMMIT and ROLLBACK below are the only ones (as in tx_demo.sql).
-        self._connection = sqlite3.connect(str(path), isolation_level=None)
+        # check_same_thread=False: the API's endpoints are `async def`, so they use
+        # the connection one request at a time, never two at once. The test client
+        # runs each request in its own thread, which the default check would refuse.
+        self._connection = sqlite3.connect(
+            str(path), isolation_level=None, check_same_thread=False
+        )
         self._connection.row_factory = sqlite3.Row
         self._connection.execute("PRAGMA foreign_keys = ON")
         self._depth = 0  # how many transaction() blocks are open right now

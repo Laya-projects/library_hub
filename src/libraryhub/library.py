@@ -176,6 +176,9 @@ class Library:
             raise MemberNotFoundError(member_id)
         return member
 
+    def list_members(self) -> list[Member]:
+        return self._members.list_all()
+
     def get_item(self, isbn: str) -> LibraryItem:
         validate_isbn(isbn)  # "123" is InvalidISBNError, not "not found"
         item = self._items.get(isbn)
@@ -214,6 +217,16 @@ class Library:
             if needle in item.title.casefold()
             or any(needle in author.casefold() for author in item.authors)
         ]
+
+    def add_item(self, item: LibraryItem) -> LibraryItem:
+        """Add a new item to the catalogue (R9: the repository refuses a repeated ISBN)."""
+        if item.total_copies < 1:
+            raise ValidationError(
+                "total_copies", "A new item needs at least 1 copy."
+            )
+        with self._unit_of_work.transaction():
+            self._items.add(item)
+        return item
 
     # --- Questions the rules are built on -------------------------------------
 

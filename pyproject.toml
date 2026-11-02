@@ -7,9 +7,12 @@ name = "libraryhub"
 version = "0.1.0"
 requires-python = ">=3.10"
 
+[project.optional-dependencies]
+api = ["fastapi", "uvicorn", "httpx"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
