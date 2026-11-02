@@ -47,7 +47,7 @@ export default function MyLoansPage() {
                 <h1>My loans</h1>
                 {membersLoading ? (
                     <p role="status">
-                        <Spinner /> Loading members...
+                        <LoadingSpinner />  Loading members...
                     </p>
                 ) : (
                     <p role="alert" className="text-red-700">
@@ -59,14 +59,14 @@ export default function MyLoansPage() {
         );
     }
 
-    const cell = "border border-gray-200 px-3 py-2 text-left";
+    const cell = "border border-purple-100 px-3 py-2 text-left";
 
     return (
         <>
             <h1>My loans</h1>
             {loading && (
                 <p role="status">
-                    <Spinner /> Loading your loans...
+                    <LoadingSpinner />  Loading your loans...
                 </p>
             )}
             {!loading && error && (

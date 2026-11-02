@@ -4,6 +4,7 @@ import { apiPost } from "../api";
 import { useBasket } from "../context/BasketContext";
 import { useMember } from "../context/MemberContext";
 import { useToast } from "../context/ToastContext";
+import { btn, btnSecondary, link } from "../ui";
 
 export default function BasketPage() {
     const { currentMember } = useMember();
@@ -56,7 +57,7 @@ export default function BasketPage() {
         <>
             <h1>Basket</h1>
             {currentMember && (
-                <p>
+                <p className="mb-3">
                     {currentMember.name} can borrow up to {basket.limit} items (
                     {basket.items.length} in the basket).
                 </p>
@@ -64,17 +65,21 @@ export default function BasketPage() {
 
             {basket.items.length === 0 && successes.length === 0 && (
                 <p>
-                    Your basket is empty. <Link to="/">Browse the catalogue</Link>
+                    Your basket is empty. <Link className={link} to="/">Browse the catalogue</Link>
                 </p>
             )}
 
             {basket.items.length > 0 && (
-                <ul className="basket-list">
+                <ul className="grid gap-2">
                     {basket.items.map((item) => (
-                        <li key={item.isbn}>
+                        <li
+                            key={item.isbn}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-purple-100 bg-white px-3 py-2"
+                        >
                             <span>{item.title}</span>
                             <button
                                 type="button"
+                                className={btnSecondary}
                                 onClick={() => basket.remove(item.isbn)}
                                 disabled={submitting}
                                 aria-label={`Remove ${item.title}`}
@@ -82,7 +87,7 @@ export default function BasketPage() {
                                 Remove
                             </button>
                             {failures[item.isbn] && (
-                                <p className="field-error" role="alert">
+                                <p className="basis-full text-red-700" role="alert">
                                     {failures[item.isbn]}
                                 </p>
                             )}
@@ -93,18 +98,18 @@ export default function BasketPage() {
 
             <div role="status" aria-live="polite">
                 {successes.map((r) => (
-                    <p key={r.isbn} className="success">
+                    <p key={r.isbn} className="mt-2 text-green-700">
                         {r.text}
                     </p>
                 ))}
             </div>
 
             {basket.items.length > 0 && (
-                <div className="basket-actions">
-                    <button type="button" onClick={checkout} disabled={submitting}>
+                <div className="my-4 flex flex-wrap gap-2">
+                    <button type="button" className={btn} onClick={checkout} disabled={submitting}>
                         {submitting ? "Borrowing..." : "Borrow"}
                     </button>
-                    <button type="button" onClick={basket.clear} disabled={submitting}>
+                    <button type="button" className={btnSecondary} onClick={basket.clear} disabled={submitting}>
                         Clear basket
                     </button>
                 </div>
@@ -112,7 +117,7 @@ export default function BasketPage() {
 
             {successes.length > 0 && (
                 <p>
-                    <Link to="/">Back to the catalogue</Link>
+                    <Link className={link} to="/">Back to the catalogue</Link>
                 </p>
             )}
         </>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ToastContext } from "../context/ToastContext";
 
 const TOAST_COLOURS = {
-    success: "bg-green-800 text-white",
+    success: "bg-purple-800 text-white",
     error: "bg-red-800 text-white",
 };
 
@@ -23,7 +23,7 @@ export default function Layout({ navbar, children }) {
         <ToastContext.Provider value={showToast}>
             <a
                 href="#main"
-                className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2 focus:text-blue-900"
+                className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2 focus:text-purple-900"
             >
                 Skip to content
             </a>

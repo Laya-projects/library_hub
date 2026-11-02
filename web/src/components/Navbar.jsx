@@ -12,7 +12,7 @@ export default function Navbar({
 }) {
     return (
         <nav
-            className="flex flex-wrap items-center gap-x-4 gap-y-1 bg-blue-900 px-4 py-3 text-white"
+            className="flex flex-wrap items-center gap-x-4 gap-y-1 bg-purple-800 px-4 py-3 text-white"
             aria-label="Main"
         >
             <Link

@@ -1,33 +1,50 @@
 # Component tree and state
 
-App
-├─ MemberProvider        (context: members, currentMember)
-├─ BasketProvider        (context: basket reducer)
-└─ Router
-   └─ Layout             (toast message)
-      ├─ Navbar
-      └─ pages: CataloguePage, BookDetailsPage, MyLoansPage,
-                BasketPage, AddItemPage, NotFoundPage
+## Tree
 
-| Component | State it owns | Props it receives |
+```
+BrowserRouter (main.jsx)
+└─ App
+   └─ MemberProvider         members, currentMember
+      └─ BasketProvider      basket (useReducer)
+         └─ AppShell
+            └─ Layout        toast (ToastContext)
+               ├─ Navbar
+               └─ Routes
+                  ├─ /            CataloguePage
+                  │                SearchBar, CategoryFilter, SortSelect
+                  │                BookList > BookCard > AvailabilityBadge, BookActions
+                  ├─ /books/:isbn BookDetailsPage (AvailabilityBadge, BookActions)
+                  ├─ /me          MyLoansPage
+                  ├─ /basket      BasketPage
+                  ├─ /admin/add   AddItemPage > AddItemForm
+                  └─ *            NotFoundPage
+```
+
+## State and props
+
+| Component | State it owns | Props |
 |---|---|---|
-| App | nothing (wraps providers and router) | none |
-| MemberProvider | members, currentMember | children |
-| BasketProvider | the basket (a reducer) | children |
-| Layout | the toast message | children |
-| Navbar | nothing | basket count, member list and selection (from context) |
-| CataloguePage | books, loading, error (via useBooks) | none; search, category and sort live in the URL |
-| SearchBar, CategoryFilter, SortSelect | nothing | value, onChange |
-| BookList | nothing | books |
-| BookCard | nothing | book, onAdd |
-| AvailabilityBadge | nothing | available, total, itemType |
-| BookDetailsPage | book, loading, error | route parameter isbn |
-| MyLoansPage | loans, loading, error | none (member from context) |
+| MemberProvider | members, currentId, loading, error | children |
+| BasketProvider | items, message (reducer) | children |
+| Layout | toast | navbar, children |
+| Navbar | nothing | basketCount, members, membersLoading, currentMemberId, onMemberChange |
+| CataloguePage | categories; books, loading, error (useBooks) | none (search, category, sort are in the URL) |
+| BookDetailsPage | book, loading, error | none (isbn from the route) |
+| MyLoansPage | data, loading, error | none (member from context) |
 | BasketPage | submitting, results | none (basket from context) |
-| AddItemForm | field values, touched fields, submitting | onCreated |
+| AddItemForm | values, touched, submitting, serverError, success | onCreated |
+| SearchBar, CategoryFilter, SortSelect | nothing | value, onChange (and categories) |
+| BookList | nothing | books, search |
+| BookCard | nothing | book, to |
+| BookActions | nothing | book (reads member, basket, toast from context) |
+| AvailabilityBadge | nothing | available, total, itemType |
 
 ## Where each piece of state lives
-- Search text, category, sort: the URL query string, so "Back to results" works.
-- Current member: MemberContext, because the navbar, loans and basket all need it.
-- Basket: BasketContext with useReducer, because the navbar count and the basket page need it.
-- Fetched data (books, loans): inside the page that shows it, never in a global store.
+
+- **Search, category, sort:** the URL query string, so "Back to results" and the browser's back button work.
+- **Current member:** `MemberContext`, because the navbar, loans, basket and `BookActions` all need it.
+- **Basket:** `BasketContext` with `useReducer` (`ADD`, `REMOVE`, `CLEAR`). It is cleared when the member changes. The limit check here is for comfort only; the server's rule is the one that must stay.
+- **Toast:** `Layout`, shared through `ToastContext`.
+- **Fetched data (books, one book, loans):** inside the page that shows it, never in a global store.
+- **Old responses:** every fetch uses an `AbortController`, so a late response never overwrites a newer one.

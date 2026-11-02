@@ -2,7 +2,7 @@ export default function AvailabilityBadge({ available, total, itemType }) {
     const base = "inline-block rounded-xl px-2 py-0.5 text-sm";
     if (itemType === "Reference") {
         return (
-            <span className={`${base} bg-gray-200 text-gray-700`}>
+            <span className={`${base} bg-purple-100 text-purple-900`}>
                 Reference item: read in the library only
             </span>
         );
