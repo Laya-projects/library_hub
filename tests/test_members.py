@@ -76,3 +76,17 @@ def test_repr_shows_the_class_and_the_details():
         "StudentMember(member_id='M004', name='Karthik N', "
         "email='karthik@example.com')"
     )
+
+def test_members_with_the_same_data_are_equal():
+    first = RegularMember("M001", "Asha Raman", "asha@example.com")
+    second = RegularMember("M001", "Asha Raman", "asha@example.com")
+    assert first == second
+    assert hash(first) == hash(second)
+
+
+def test_members_of_another_kind_or_with_other_data_are_not_equal():
+    base = RegularMember("M001", "Asha Raman", "asha@example.com")
+    assert base != StudentMember("M001", "Asha Raman", "asha@example.com")
+    assert base != RegularMember("M002", "Asha Raman", "asha@example.com")
+    assert base != RegularMember("M001", "Other Name", "asha@example.com")
+    assert base != "M001"

@@ -377,6 +377,7 @@ def test_once_the_fines_are_paid_the_same_member_gets_r3(world):
     give_karthik_two_more_loans(world)
     for fine in world.fines.list_all():
         fine.paid = True
+        world.fines.update(fine)
     with pytest.raises(BorrowLimitExceededError):
         world.library.borrow(KARTHIK, SAPIENS, TODAY)
 

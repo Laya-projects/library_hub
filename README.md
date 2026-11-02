@@ -153,7 +153,6 @@ top. The menu never applies a rule itself; it asks `Library` and prints.
 See [DECISIONS.md](DECISIONS.md) for the choices made in this phase and why.
 
 ## Rules and tests
-## Rules and tests
 
 | Rule | What it says | Enforced in | Tests |
 |------|--------------|-------------|-------|
@@ -225,19 +224,58 @@ python -m pytest --cov=libraryhub --cov-report=term-missing
 - `WaitingQueue` replaces the raw deques of the waiting list.
 - `benchmarks.py` and `docs/benchmarks.md` (predicted against measured Big-O).
 
-## How to check
+## Phase 3: durable data (SQL)
 
-    python -m ruff check .
-    python -m mypy src
-    python -m pytest --cov=libraryhub --cov-report=term-missing
+Loans, fines, members and the catalogue now live in a SQLite database, so they
+survive closing the program. The rules R1 to R10 and every earlier sample are
+unchanged: `Library` never mentions SQL, and the same tests pass on the in-memory
+repositories and on the database.
 
-## Checklist
+### What was added
 
-- [ ] ruff and mypy clean
-- [ ] all tests pass (Phase 1 tests unchanged and green)
-- [ ] coverage 90% or more
-- [ ] menu samples reproduce (`tests/test_golden.py`)
-- [ ] waiting list is first come, first served
-- [ ] undo works for borrow and return
-- [ ] Dockerfile and Jenkinsfile unchanged and still working
-- [ ] README and DECISIONS.md updated
+| Piece | Where |
+|---|---|
+| Normalisation write-up (flat file to 1NF, 2NF, 3NF) | `docs/normalisation.md`, `library_flat.csv` |
+| ER diagram with the cardinality of every relationship | `docs/er_diagram.md` |
+| Schema (keys, NOT NULL, UNIQUE, CHECKs, ON DELETE RESTRICT) | `sql/schema.sql` |
+| Seed data (7 items, 5 members, 10 loans, 4 fines, 3 open loans) | `sql/seed.sql` |
+| The 12 queries, each with its question and join explained | `sql/queries.sql` |
+| Transaction demo: a broken borrow rolls back and leaves no trace | `sql/tx_demo.sql` |
+| Index report (`EXPLAIN QUERY PLAN` before and after) | `docs/index_report.md` |
+| `storage/` package: `Database` (connection and transactions) and one repository per table | `src/libraryhub/storage/` |
+| Unit of work: each business operation commits or rolls back as one | `src/libraryhub/unit_of_work.py` |
+| Injection experiment and its saved output | `experiments/injection_demo.py`, `docs/injection_evidence.txt` |
+
+### Running it
+
+The first run creates `library.db` in the project folder and fills it from the CSV
+files. After that the database is the truth and the CSV files are not read again.
+
+```
+$env:TODAY="2026-10-12"; python -m libraryhub.main
+```
+
+To start again from the starter data, delete `library.db`. Set `LIBRARY_DB` to use
+another file. Without it, calling `main()` as a function uses the in-memory
+repositories, as in Phase 1 and 2.
+
+Persistence check: borrow `9780000000011` as `M001`, leave with `0`, start the
+program again and choose `7` for `M001`. The loan `L011` is still there.
+
+To build and query a database with the SQL files directly:
+
+```
+python sql/run_sql.py library.db sql/schema.sql sql/seed.sql
+python sql/run_sql.py library.db sql/queries.sql
+```
+
+### Checks
+
+```
+python -m ruff check .
+python -m mypy src
+python -m pytest --cov=libraryhub --cov-report=term-missing
+```
+
+`library_world` tests run twice, once on each backend (`[memory]` and `[sqlite]`).
+`tests/test_no_string_sql.py` fails if any SQL in `src/` is built from text.

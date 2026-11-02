@@ -1,0 +1,11 @@
+loan_id,member_name,email,membership_type,item_title,authors,isbn,category,parent_category,pages,price,issue_date,due_date,return_date,fine,fine_paid
+L001,Rahul Mehta,rahul@example.com,Regular,The Alchemist,Paulo Coelho,9780000000028,Fiction,,208,300,2026-09-01,2026-09-22,,,
+L002,Karthik N,karthik@example.com,Student,Python Crash Course,Eric Matthes,9780000000042,Programming,Technology,544,700,2026-09-21,2026-10-05,,,
+L003,Sneha Iyer,sneha@example.com,Premium,Sapiens,Yuval Noah Harari,9780000000059,History,,512,600,2026-09-20,2026-10-20,,,
+L004,Asha Raman,asha@example.com,Student,Wings of Fire,A.P.J. Abdul Kalam;Arun Tiwari,9780000000011,Biography,,180,250,2026-09-10,2026-09-24,2026-09-24,,
+L005,Asha Raman,asha@example.com,Student,Python Crash Course,Eric Matthes,9780000000042,Programming,Technology,544,700,2026-08-01,2026-08-15,2026-08-20,10,yes
+L006,Sneha Iyer,sneha@example.com,Premium,Clean Code,Robert C. Martin,9780000000035,Software Engineering,Technology,464,900,2026-08-05,2026-09-04,2026-09-02,,
+L007,Rahul Mehta,rahul@example.com,Regular,Python Crash Course,Eric Matthes,9780000000042,Programming,Technology,544,700,2026-07-10,2026-07-31,2026-07-31,,
+L008,Rahul Mehta,rahul@example.com,Regular,Wings of Fire,A.P.J. Abdul Kalam;Arun Tiwari,9780000000011,Biography,,180,250,2026-06-01,2026-06-22,2026-06-30,40,yes
+L009,Karthik N,karthik@example.com,Student,India Today (Oct 2026),Various,9780000000073,Magazines,,90,80,2026-07-01,2026-07-08,2026-09-06,80,no
+L010,Karthik N,karthik@example.com,Student,Wings of Fire,A.P.J. Abdul Kalam;Arun Tiwari,9780000000011,Biography,,180,250,2026-07-20,2026-08-03,2026-08-23,40,no

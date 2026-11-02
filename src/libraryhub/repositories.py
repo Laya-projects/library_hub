@@ -110,6 +110,10 @@ class FineRepository(ABC):
     def remove_for_loan(self, loan_id: str) -> None:
         """Delete the fine recorded for this loan, if any. Used to undo a return."""
 
+    @abstractmethod
+    def update(self, fine: Fine) -> None:
+        """Save changes to a stored fine (for example paid). A database repository
+        only sees a change when this is called."""
 
 # --- In-memory versions ------------------------------------------------------
 # list_all() hands out a copy of the collection, so callers cannot add to or
@@ -202,6 +206,7 @@ class InMemoryLoanRepository(LoanRepository):
                 return
         raise LoanNotFoundError(loan_id)
 
+
 class InMemoryFineRepository(FineRepository):
     def __init__(self) -> None:
         self._fines: list[Fine] = []
@@ -213,8 +218,15 @@ class InMemoryFineRepository(FineRepository):
             )
         self._fines.append(fine)
 
+    def update(self, fine: Fine) -> None:
+        for index, stored in enumerate(self._fines):
+            if stored.loan_id == fine.loan_id:
+                self._fines[index] = fine
+                return
+        raise ValidationError("loan_id", f"No fine exists for loan {fine.loan_id}.")
+
     def list_all(self) -> list[Fine]:
         return list(self._fines)
-    
+
     def remove_for_loan(self, loan_id: str) -> None:
         self._fines = [fine for fine in self._fines if fine.loan_id != loan_id]
