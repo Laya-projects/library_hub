@@ -143,3 +143,11 @@ Decision log for LibraryHub Mini. Phase 1 entries give the problem, the options,
 ### D5. Database
 - **What:** SQLite.
 - **Why:** it is built into Python, needs no install, and gives a fresh temporary database for every test, which Part B needs.
+
+## Phase 4: React + API
+
+## D25: async endpoints and one shared SQLite connection (Phase 4)
+
+**What:** Every API endpoint is `async def` with no `await` inside, and the `Database` opens its single connection with `check_same_thread=False`.
+
+**Why:** FastAPI runs a normal `def` endpoint in a pool of worker threads, so two requests could use the one connection at the same moment. An `async def` endpoint runs on the server's single event-loop thread, one request at a time, so the connection is never used twice at once. That also means two members borrowing the last copy at the same moment are handled one after the other, and the second one sees the true state. The thread check had to be switched off because the test client runs each request in its own helper thread. The alternative, ordinary `def` endpoints with a lock around every database call, would work but adds code and slows every request.

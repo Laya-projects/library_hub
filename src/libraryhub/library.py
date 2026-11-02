@@ -176,6 +176,9 @@ class Library:
             raise MemberNotFoundError(member_id)
         return member
 
+    def list_members(self) -> list[Member]:
+        return self._members.list_all()
+
     def get_item(self, isbn: str) -> LibraryItem:
         validate_isbn(isbn)  # "123" is InvalidISBNError, not "not found"
         item = self._items.get(isbn)
