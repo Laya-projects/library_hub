@@ -7,7 +7,7 @@ and turns the answer into JSON.
 """
 
 from __future__ import annotations
-
+from libraryhub.csv_loader import ITEM_CLASSES
 import os
 from contextlib import asynccontextmanager
 from datetime import date
@@ -15,13 +15,27 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, Request
 
-from api.schemas import BookOut, LoanLineOut, MemberLoansOut, MemberOut
+from api.errors import register_error_handlers
+from api.schemas import (
+    BookIn,
+    BookOut,
+    LoanCreatedOut,
+    LoanIn,
+    LoanLineOut,
+    MemberLoansOut,
+    MemberOut,
+    ReservationIn,
+    ReservationOut,
+    ReturnOut,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
 
     from libraryhub.items import LibraryItem
     from libraryhub.library import Library
+
+from fastapi.middleware.cors import CORSMiddleware
 
 TITLE = "LibraryHub Mini API"
 
@@ -146,6 +160,52 @@ async def member_loans(
     )
 
 
+# --- Write endpoints -------------------------------------------------------------
+
+
+@router.post("/loans", status_code=201, response_model=LoanCreatedOut)
+async def create_loan(
+    body: LoanIn, library: LibraryDep, today: TodayDep
+) -> LoanCreatedOut:
+    loan = library.borrow(body.member_id, body.isbn, today)
+    return LoanCreatedOut(loan_id=loan.loan_id, due_date=loan.due_date.isoformat())
+
+
+@router.post("/loans/{loan_id}/return", response_model=ReturnOut)
+async def return_loan(
+    loan_id: str, library: LibraryDep, today: TodayDep
+) -> ReturnOut:
+    result = library.return_item(loan_id, today)
+    return ReturnOut(
+        loan_id=result.loan.loan_id,
+        days_late=result.days_late,
+        fine=result.fine,
+        next_in_waiting_list=result.next_waiting.name if result.next_waiting else None,
+    )
+
+
+@router.post("/reservations", status_code=201, response_model=ReservationOut)
+async def create_reservation(
+    body: ReservationIn, library: LibraryDep
+) -> ReservationOut:
+    return ReservationOut(position=library.reserve(body.member_id, body.isbn))
+
+@router.post("/books", status_code=201, response_model=BookOut)
+async def add_book(body: BookIn, library: LibraryDep) -> BookOut:
+    item_class = ITEM_CLASSES[body.item_type]
+    item = item_class(
+        isbn=body.isbn,
+        title=body.title,
+        authors=body.authors,
+        category=body.category,
+        parent_category=body.parent_category,
+        pages=body.pages,
+        price=body.price,
+        total_copies=body.copies,
+    )
+    library.add_item(item)
+    return book_out(library, item)
+
 # --- Building the app ------------------------------------------------------------
 
 
@@ -180,8 +240,14 @@ def create_app(library: Library | None = None, today: date | None = None) -> Fas
         app = FastAPI(title=TITLE)
         app.state.library = library
         app.state.today = today if today is not None else date.today()
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[os.environ.get("WEB_ORIGIN", "http://localhost:5173")],
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
+    )
     app.include_router(router)
+    register_error_handlers(app)
     return app
-
 
 app = create_app()

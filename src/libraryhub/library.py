@@ -218,6 +218,16 @@ class Library:
             or any(needle in author.casefold() for author in item.authors)
         ]
 
+    def add_item(self, item: LibraryItem) -> LibraryItem:
+        """Add a new item to the catalogue (R9: the repository refuses a repeated ISBN)."""
+        if item.total_copies < 1:
+            raise ValidationError(
+                "total_copies", "A new item needs at least 1 copy."
+            )
+        with self._unit_of_work.transaction():
+            self._items.add(item)
+        return item
+
     # --- Questions the rules are built on -------------------------------------
 
     def available_copies(self, isbn: str) -> int:
