@@ -7,6 +7,8 @@ import SearchBar from "../components/SearchBar";
 import CategoryFilter from "../components/CategoryFilter";
 import SortSelect from "../components/SortSelect";
 import BookList from "../components/BookList";
+import LoadingSpinner from "../components/LoadingSpinner";
+import { btn } from "../ui"
 
 const SORTS = ["title", "pages", "category"];
 
@@ -52,7 +54,7 @@ export default function CataloguePage({ refreshKey = 0 }) {
     return (
         <>
             <h1>Catalogue</h1>
-            <div className="filters">
+            <div className="mb-4 grid gap-3 sm:grid-cols-3">
                 <SearchBar value={query} onChange={(v) => setParam("q", v)} />
                 <CategoryFilter
                     value={category}
@@ -62,15 +64,17 @@ export default function CataloguePage({ refreshKey = 0 }) {
                 <SortSelect value={sort} onChange={(v) => setParam("sort", v)} />
             </div>
 
+            {!loading && error && (
+                <p role="alert" className="text-red-700">
+                    {error}{" "}
+                    <button type="button" className={btn} onClick={retry}>Retry</button>
+                </p>
+            )}
+
             <div role="status" aria-live="polite">
                 {loading && (
                     <p>
-                        <span className="spinner" aria-hidden="true" /> Loading catalogue...
-                    </p>
-                )}
-                {!loading && error && (
-                    <p>
-                        {error} <button onClick={retry}>Retry</button>
+                        <LoadingSpinner /> Loading catalogue...
                     </p>
                 )}
                 {!loading && !error && books.length === 0 && (
@@ -81,7 +85,7 @@ export default function CataloguePage({ refreshKey = 0 }) {
                     </p>
                 )}
                 {!loading && !error && books.length > 0 && (
-                    <p>{books.length === 1 ? "1 result" : `${books.length} results`}</p>
+                    <p className="mb-3">{books.length === 1 ? "1 result" : `${books.length} results`}</p>
                 )}
             </div>
 

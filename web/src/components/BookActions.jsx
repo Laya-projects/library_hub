@@ -2,6 +2,7 @@ import { apiPost } from "../api";
 import { useBasket } from "../context/BasketContext";
 import { useMember } from "../context/MemberContext";
 import { useToast } from "../context/ToastContext";
+import { btn } from "../ui";
 
 export default function BookActions({ book }) {
     const { currentMember } = useMember();
@@ -30,6 +31,7 @@ export default function BookActions({ book }) {
         return (
             <button
                 type="button"
+                className={`${btn} mt-3`}
                 onClick={() => basket.add(book)}
                 disabled={!currentMember || inBasket || basket.isFull}
             >
@@ -39,7 +41,7 @@ export default function BookActions({ book }) {
     }
 
     return (
-        <button type="button" onClick={joinWaitingList} disabled={!currentMember}>
+        <button type="button" className={`${btn} mt-3`} onClick={joinWaitingList} disabled={!currentMember}>
             Join waiting list
         </button>
     );

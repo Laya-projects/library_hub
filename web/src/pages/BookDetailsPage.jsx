@@ -3,6 +3,8 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { apiGet } from "../api";
 import AvailabilityBadge from "../components/AvailabilityBadge";
 import BookActions from "../components/BookActions";
+import LoadingSpinner from "../components/LoadingSpinner";
+import { btn, card, link } from "../ui";
 
 export default function BookDetailsPage() {
     const { isbn } = useParams();
@@ -31,8 +33,8 @@ export default function BookDetailsPage() {
     }, [isbn, reloadKey]);
 
     const back = (
-        <p>
-            <Link to={{ pathname: "/", search }}>← Back to results</Link>
+        <p className="mb-3">
+            <Link className={link} to={{ pathname: "/", search }}>← Back to results</Link>
         </p>
     );
 
@@ -41,7 +43,7 @@ export default function BookDetailsPage() {
             <>
                 {back}
                 <p role="status">
-                    <span className="spinner" aria-hidden="true" /> Loading book...
+                    <LoadingSpinner /> Loading book...
                 </p>
             </>
         );
@@ -51,9 +53,11 @@ export default function BookDetailsPage() {
         return (
             <>
                 {back}
-                <p role="alert">{error.message}</p>
+                <p role="alert" className="text-red-700">{error.message}</p>
                 {error.status === 0 && (
-                    <button onClick={() => setReloadKey((k) => k + 1)}>Retry</button>
+                    <button type="button" className={`${btn} mt-2`} onClick={() => setReloadKey((k) => k + 1)}>
+                        Retry
+                    </button>
                 )}
             </>
         );
@@ -68,19 +72,21 @@ export default function BookDetailsPage() {
     return (
         <>
             {back}
-            <article className="details">
+            <article className={`${card} max-w-lg`}>
                 <h1>{book.title}</h1>
                 <p>{book.authors.join(", ")}</p>
-                <p>
+                <p className="mt-1">
                     {book.category} · {book.item_type} · {book.pages} pages
                 </p>
-                <p>ISBN {book.isbn}</p>
-                {book.item_type !== "Reference" && <p>{copies}</p>}
-                <AvailabilityBadge
-                    available={book.available}
-                    total={book.total}
-                    itemType={book.item_type}
-                />
+                <p className="mt-1">ISBN {book.isbn}</p>
+                {book.item_type !== "Reference" && <p className="mt-1">{copies}</p>}
+                <div className="mt-2">
+                    <AvailabilityBadge
+                        available={book.available}
+                        total={book.total}
+                        itemType={book.item_type}
+                    />
+                </div>
                 <BookActions book={book} />
             </article>
         </>

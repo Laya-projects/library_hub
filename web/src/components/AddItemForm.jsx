@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { apiPost } from "../api";
+import { btn, input } from "../ui";
 
 const EMPTY = {
     isbn: "",
@@ -31,11 +32,11 @@ function validate(v) {
 
 function Field({ id, label, error, children }) {
     return (
-        <div className="field">
-            <label htmlFor={id}>{label}</label>
+        <div className="grid gap-1">
+            <label htmlFor={id} className="text-sm font-medium">{label}</label>
             {children}
             {error && (
-                <p id={`${id}-error`} className="field-error">
+                <p id={`${id}-error`} className="text-red-700">
                     {error}
                 </p>
             )}
@@ -57,6 +58,7 @@ export default function AddItemForm({ onCreated }) {
     function inputProps(name) {
         return {
             id: name,
+            className: input,
             value: values[name],
             onChange: (e) => {
                 setValues((v) => ({ ...v, [name]: e.target.value }));
@@ -102,7 +104,7 @@ export default function AddItemForm({ onCreated }) {
     }
 
     return (
-        <form onSubmit={handleSubmit} className="add-form" noValidate>
+        <form onSubmit={handleSubmit} className="grid max-w-md gap-3" noValidate>
             <Field id="isbn" label="ISBN (13 digits)" error={shown("isbn")}>
                 <input type="text" inputMode="numeric" {...inputProps("isbn")} />
             </Field>
@@ -130,11 +132,11 @@ export default function AddItemForm({ onCreated }) {
             </Field>
 
             <div role="status" aria-live="polite">
-                {serverError && <p className="field-error">{serverError}</p>}
-                {success && <p className="success">{success}</p>}
+                {serverError && <p className="text-red-700">{serverError}</p>}
+                {success && <p className="text-green-700">{success}</p>}
             </div>
 
-            <button type="submit" disabled={!isValid || submitting}>
+            <button type="submit" className={`${btn} justify-self-start`} disabled={!isValid || submitting}>
                 {submitting ? "Adding..." : "Add item"}
             </button>
         </form>

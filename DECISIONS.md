@@ -187,3 +187,10 @@ Each details link carries that query string, and "Back to results" uses it.
 **Why:** State inside the catalogue page is lost when the page unmounts, so "Back to results"
 would show an empty search. The URL survives navigation, reload, the browser's back button and
 a shared link, and no extra state needs to be kept in sync.
+
+## D6 Tailwind CSS for styling
+
+**What:** I use Tailwind CSS (v4, through its Vite plugin) for all styling. Shared class strings live in src/ui.js, and the old plain CSS file was removed.
+
+**Why:** My components were already semantic and had working labels, so Tailwind could be added to them without rewriting. Material UI would have replaced my own buttons, inputs, table and toast.
+The 360 px layout is controlled right in the markup (grid sm:grid-cols-3, flex-wrap), so I can see what each screen does at each width.

@@ -27,7 +27,7 @@ function AppShell() {
       }
     >
       {basket.message && (
-        <p role="status" className="notice">
+        <p role="status" className="mb-4 rounded-md border border-amber-300 bg-amber-100 px-3 py-2 text-amber-900">
           {basket.message}
         </p>
       )}
