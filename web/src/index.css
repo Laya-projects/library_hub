@@ -1,0 +1,76 @@
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  color: #1f2937;
+  background: #f9fafb;
+}
+
+.navbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: #1e3a8a;
+  color: #fff;
+}
+
+.navbar a {
+  color: #fff;
+}
+
+.navbar .brand {
+  font-weight: 700;
+  margin-right: auto;
+}
+
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.book-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.book-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.book-card h3 {
+  margin: 0 0 0.25rem;
+}
+
+.book-card p {
+  margin: 0.25rem 0;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+.badge-ok {
+  background: #dcfce7;
+  color: #14532d;
+}
+
+.badge-none {
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+
+.badge-ref {
+  background: #e5e7eb;
+  color: #374151;
+}
