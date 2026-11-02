@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import Navbar from "./components/Navbar";
@@ -8,23 +7,30 @@ import MyLoansPage from "./pages/MyLoansPage";
 import BasketPage from "./pages/BasketPage";
 import AddItemPage from "./pages/AddItemPage";
 import NotFoundPage from "./pages/NotFoundPage";
-import { sampleMembers } from "./data/sampleMembers";
+import { MemberProvider, useMember } from "./context/MemberContext";
+import { BasketProvider, useBasket } from "./context/BasketContext";
 
-export default function App() {
-  // Temporary: B6 moves this into MemberContext.
-  const [memberId, setMemberId] = useState(sampleMembers[0].member_id);
+function AppShell() {
+  const { members, currentMember, setCurrentMemberId, loading } = useMember();
+  const basket = useBasket();
 
   return (
     <Layout
       navbar={
         <Navbar
-          basketCount={0}
-          members={sampleMembers}
-          currentMemberId={memberId}
-          onMemberChange={setMemberId}
+          basketCount={basket.items.length}
+          members={members}
+          membersLoading={loading}
+          currentMemberId={currentMember?.member_id ?? ""}
+          onMemberChange={setCurrentMemberId}
         />
       }
     >
+      {basket.message && (
+        <p role="status" className="notice">
+          {basket.message}
+        </p>
+      )}
       <Routes>
         <Route path="/" element={<CataloguePage />} />
         <Route path="/books/:isbn" element={<BookDetailsPage />} />
@@ -34,5 +40,15 @@ export default function App() {
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Layout>
+  );
+}
+
+export default function App() {
+  return (
+    <MemberProvider>
+      <BasketProvider>
+        <AppShell />
+      </BasketProvider>
+    </MemberProvider>
   );
 }

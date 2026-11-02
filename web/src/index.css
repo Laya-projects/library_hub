@@ -190,3 +190,101 @@ button:disabled {
   padding: 1rem;
   max-width: 520px;
 }
+
+.toast-area {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 1rem;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  padding: 0 1rem;
+}
+
+.toast {
+  pointer-events: auto;
+  margin: 0;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  max-width: 520px;
+}
+
+.toast-success {
+  background: #166534;
+  color: #fff;
+}
+
+.toast-error {
+  background: #991b1b;
+  color: #fff;
+}
+
+.toast button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.notice {
+  background: #fef3c7;
+  color: #78350f;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+}
+
+.basket-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.basket-list li {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.basket-list li .field-error {
+  flex-basis: 100%;
+}
+
+.basket-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.basket-actions button,
+.basket-list button {
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  background: #fff;
+}
+
+th,
+td {
+  border: 1px solid #e5e7eb;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+}

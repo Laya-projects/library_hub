@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import AvailabilityBadge from "./AvailabilityBadge";
 import BookActions from "./BookActions";
 
-export default function BookCard({ book, to, onAdd, onJoin }) {
+export default function BookCard({ book, to }) {
     return (
         <article className="book-card">
             <h3>
@@ -17,7 +17,7 @@ export default function BookCard({ book, to, onAdd, onJoin }) {
                 total={book.total}
                 itemType={book.item_type}
             />
-            <BookActions book={book} onAdd={onAdd} onJoin={onJoin} />
+            <BookActions book={book} />
         </article>
     );
 }
