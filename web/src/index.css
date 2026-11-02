@@ -74,3 +74,10 @@ body {
   background: #e5e7eb;
   color: #374151;
 }
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}

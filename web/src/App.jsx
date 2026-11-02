@@ -1,8 +1,7 @@
 import { useState } from "react";
 import Layout from "./components/Layout";
 import Navbar from "./components/Navbar";
-import BookList from "./components/BookList";
-import { sampleBooks } from "./data/sampleBooks";
+import CataloguePage from "./pages/CataloguePage";
 import { sampleMembers } from "./data/sampleMembers";
 
 export default function App() {
@@ -20,8 +19,7 @@ export default function App() {
         />
       }
     >
-      <h1>Catalogue</h1>
-      <BookList books={sampleBooks} />
+      <CataloguePage />
     </Layout>
   );
 }
