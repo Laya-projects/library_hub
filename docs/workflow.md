@@ -78,3 +78,80 @@
 | **10** | **Wrap-up:** tests, ruff and mypy clean, coverage at 90% or more, README section, `DECISIONS.md` with at least 3 new entries, pull request | Phase 2 finished |
 
 
+# Phase 3 plan: Durable data (SQL)
+
+**Part A** is design and SQL, on paper and in `.sql` files.
+**Part B** connects your Python engine to the database.
+
+
+
+**Branch:** `feature/sql`, created after Phase 2 (`feature/dsa`) was finished.
+
+---
+
+## Part A: Design and SQL
+
+| # | Step | What you do | Files you produce | Status |
+|---|---|---|---|---|
+| 0 | **Setup** | Create `sql/` and the branch. Check `sqlite3` works in Python and in a SQLite shell or editor. | `sql/`, `sql/run_sql.py` | [x] |
+| 1 | **Flat file (3.1)** | Join the 3 starter CSVs into one row per loan with the 16 columns of the brief. Write 3 anomalies with real rows: update, insert (Divya Rao, who never borrowed) and delete. | `library_flat.csv`, `docs/normalisation.md` | [x] |
+| 2 | **Normalise (3.2)** | Take the flat file to 1NF (authors in one `A;B` cell), 2NF, then 3NF (membership type to limits, category to parent). Show before and after at each step. List the final tables. | `docs/normalisation.md` | [x] |
+| 3 | **ER diagram and schema (3.3)** | Draw the ER diagram and show the cardinality of every relationship. Write `schema.sql` with PK, FK, NOT NULL, UNIQUE (ISBN, email) and CHECKs (due date not before issue date, copies and fine not negative). Choose ON DELETE on purpose for every FK. | `sql/schema.sql`, `docs/er_diagram.md` | [x] |
+| 4 | **Seed (3.4)** | Load the CSVs with `seed.sql` or a loader script. Counts: 7 items, 7 authors, 5 members, 10 loans, 4 fines, 8 categories, 3 open loans. | `sql/seed.sql` | [x] |
+| 5 | **Query pack (3.5)** | The 12 queries, each with its business question as a comment and a note on which join you used and why. | `sql/queries.sql` | [x] |
+| 6 | **Transactions (3.6a)** | Borrow as one transaction (check availability, insert the loan, insert the audit row). Break it on purpose at the audit insert, show that ROLLBACK leaves no L011, then run the correct version. | `sql/tx_demo.sql` | [x] |
+| 7 | **Indexes (3.6b)** | Generate 100,000 loans, pick the 2 slowest queries, run `EXPLAIN QUERY PLAN` before and after an index. Name one index you chose not to create and say why. | `docs/index_report.md` | [x] |
+
+**Query batches (step 5)**
+- **Q1 to Q4:** the warm-up (JOIN, WHERE, GROUP BY, LIMIT).
+- **Q5, Q6, Q8, Q11:** LEFT JOIN, a subquery or NOT EXISTS. Ask what you must keep when there is no match.
+- **Q7, Q9, Q10, Q12:** the hard ones (month grouping, HAVING, date differences, a self-join on loans).
+
+**Things that trip you up**
+- Q7 groups by the month the item was **returned**, not issued.
+- Q10 counts only returned loans.
+- Q3 and Q6 depend on `TODAY = 2026-10-12`, so never use `date('now')`.
+- 8 categories means the 7 used by items plus Technology.
+- Q11 lists the Encyclopaedia with 1 available (decision D3).
+
+---
+
+## Part B: Python meets the database
+
+| # | Step | What you do | Files | Status |
+|---|---|---|---|---|
+| 8 | **`storage/` package (3.7a)** | `Database` (connection, schema, transactions) and one repository class per table, using `sqlite3` with `?` placeholders only. They plug into the existing repository interfaces, so `Library` barely changes. | `src/libraryhub/storage/` | [x] |
+| 9 | **Unit of work (3.7b)** | A context manager so each business operation commits or rolls back as one. `Library` depends on a small `UnitOfWork` interface, and `Database` implements it (savepoints for nested blocks). Memory (undo stack, waiting queue) changes only after the commit. | `src/libraryhub/unit_of_work.py`, `tests/test_unit_of_work.py` | [x] |
+| 10 | **Phase 1 and 2 tests on the database (3.7c)** | `conftest` builds a fresh database per test, so every `library_world` test runs on `[memory]` and `[sqlite]`. Persistence check: borrow, close, reopen, option 7 shows L011. Two fixes were needed: `FineRepository.update`, and `Member` equality by value. | `tests/conftest.py`, `src/libraryhub/main.py`, `tests/test_persistence.py` | [x] |
+| 11 | **Injection experiment (3.8)** | `search_unsafe` (f-string) and `search_safe` (parameterised) in a throwaway file. Reproduce the 4 outputs (1, 7, 0, 1 rows) and save them as evidence. | `experiments/injection_demo.py`, `docs/injection_evidence.txt`, `tests/test_injection.py` | [x] |
+| 12 | **Wrap-up** | ruff, mypy, pytest; coverage 90% or more; check no SQL is built from text; update the README and DECISIONS; open the PR. | `tests/test_no_string_sql.py`, README, DECISIONS.md | [ ] confirm |
+
+**Step 12 checklist (tick when true)**
+- [ ] `python -m ruff check .` passes
+- [ ] `python -m mypy src` passes
+- [ ] `python -m pytest --cov=libraryhub --cov-report=term-missing` all green, total 90% or more
+- [ ] counts after loading: 7 items, 5 members, 10 loans, 4 fines, 3 open loans
+- [ ] all 12 query results match the brief (`docs/queries_output.txt`)
+- [ ] rolled-back transaction leaves no trace (`docs/tx_demo_output.txt`)
+- [ ] no SQL built from text in `src/` (`tests/test_no_string_sql.py`)
+- [ ] Dockerfile copies `sql/`
+- [ ] README Phase 3 section, DECISIONS.md and the pull request done
+
+---
+
+## Running the SQL files
+
+```
+python sql/run_sql.py library.db sql/schema.sql sql/seed.sql
+python sql/run_sql.py library.db sql/queries.sql
+python sql/run_sql.py :memory: sql/schema.sql sql/seed.sql sql/queries.sql
+```
+
+On your office laptop, plain script mode could not read `.sql` files, so you used the
+`runsql` PowerShell function instead (it runs the same helper through `python -c`):
+
+```powershell
+function runsql { python -c "import sys; sys.argv = ['run_sql.py'] + sys.argv[1:]; exec(open(r'C:\Users\laya_r\OneDrive - LevelShift\library_hub\sql\run_sql.py', encoding='utf-8').read())" @args }
+```
+
+To reset the real database, delete `library.db`. Git ignores `*.db`.
