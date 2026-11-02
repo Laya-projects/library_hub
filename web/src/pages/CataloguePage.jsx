@@ -7,7 +7,7 @@ import CategoryFilter from "../components/CategoryFilter";
 import SortSelect from "../components/SortSelect";
 import BookList from "../components/BookList";
 
-export default function CataloguePage() {
+export default function CataloguePage({ refreshKey = 0 }) {
     const [query, setQuery] = useState("");
     const [category, setCategory] = useState("");
     const [sort, setSort] = useState("title");
@@ -18,6 +18,7 @@ export default function CataloguePage() {
         q: debouncedQuery,
         category,
         sort,
+        refreshKey,
     });
 
     useEffect(() => {
@@ -26,7 +27,7 @@ export default function CataloguePage() {
             .then(setCategories)
             .catch(() => { }); // the filter just stays empty if this fails
         return () => controller.abort();
-    }, []);
+    }, [refreshKey]);
 
     return (
         <>
@@ -38,7 +39,7 @@ export default function CataloguePage() {
             </div>
 
             <div role="status" aria-live="polite">
-                {loading && <p>Loading catalogue...</p>}
+                {loading && <p><span className="spinner" aria-hidden="true" /> Loading catalogue...</p>}
                 {!loading && error && (
                     <p>
                         {error} <button onClick={retry}>Retry</button>

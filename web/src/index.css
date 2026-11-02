@@ -81,3 +81,66 @@ body {
   gap: 1rem;
   margin-bottom: 1rem;
 }
+
+.spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid #9ca3af;
+  border-top-color: #1e3a8a;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.book-card button,
+.add-form button {
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+}
+
+.book-card button:focus-visible,
+.add-form button:focus-visible,
+.add-form input:focus-visible,
+.add-form select:focus-visible {
+  outline: 3px solid #f59e0b;
+  outline-offset: 2px;
+}
+
+.add-form {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 420px;
+}
+
+.field {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.field input,
+.field select {
+  padding: 0.4rem;
+}
+
+.field-error {
+  color: #b91c1c;
+  margin: 0;
+}
+
+.success {
+  color: #15803d;
+  margin: 0;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

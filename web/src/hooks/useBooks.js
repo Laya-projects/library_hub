@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "../api";
 
-export function useBooks({ q, category, sort }) {
+export function useBooks({ q, category, sort, refreshKey = 0 }) {
     const [books, setBooks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -29,7 +29,7 @@ export function useBooks({ q, category, sort }) {
             });
 
         return () => controller.abort(); // cleanup: cancel the old request
-    }, [q, category, sort, reloadKey]);
+    }, [q, category, sort, reloadKey, refreshKey]);
 
     return { books, loading, error, retry: () => setReloadKey((k) => k + 1) };
 }
