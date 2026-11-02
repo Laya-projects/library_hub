@@ -1,11 +1,13 @@
+import { Link } from "react-router-dom";
 import AvailabilityBadge from "./AvailabilityBadge";
+import BookActions from "./BookActions";
 
-export default function BookCard({ book, onAdd, onJoin }) {
-    const isReference = book.item_type === "Reference";
-
+export default function BookCard({ book, to, onAdd, onJoin }) {
     return (
         <article className="book-card">
-            <h3>{book.title}</h3>
+            <h3>
+                <Link to={to}>{book.title}</Link>
+            </h3>
             <p>{book.authors.join(", ")}</p>
             <p>
                 {book.category} · {book.pages} pages
@@ -15,17 +17,7 @@ export default function BookCard({ book, onAdd, onJoin }) {
                 total={book.total}
                 itemType={book.item_type}
             />
-            {/* A reference item has no button at all (R1). */}
-            {!isReference &&
-                (book.available > 0 ? (
-                    <button type="button" onClick={() => onAdd?.(book)}>
-                        Add to basket
-                    </button>
-                ) : (
-                    <button type="button" onClick={() => onJoin?.(book)}>
-                        Join waiting list
-                    </button>
-                ))}
+            <BookActions book={book} onAdd={onAdd} onJoin={onJoin} />
         </article>
     );
 }

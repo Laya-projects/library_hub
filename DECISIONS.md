@@ -143,11 +143,47 @@ Decision log for LibraryHub Mini. Phase 1 entries give the problem, the options,
 ### D5. Database
 - **What:** SQLite.
 - **Why:** it is built into Python, needs no install, and gives a fresh temporary database for every test, which Part B needs.
+# Phase 4: API and website
 
-## Phase 4: React + API
+## D1 Status codes
 
-## D25: async endpoints and one shared SQLite connection (Phase 4)
+**What:** 404 for missing things (item, member, loan). 422 for bad input (bad ISBN, blank
+or invalid values, missing fields). 409 for rule or state conflicts (R1, R2, R3, R4, R6, R7,
+R8, loan already returned, waiting-list errors, duplicate ISBN). 500 for anything
+unexpected, with a plain message.
 
-**What:** Every API endpoint is `async def` with no `await` inside, and the `Database` opens its single connection with `check_same_thread=False`.
+**Why:** 404 means it doesn't exist, 409 means it exists but its state conflicts, and 422
+means the input makes no sense. `ValidationError` is one class with two meanings, so it is
+split by its `field`: `waiting_list` and `duplicate_isbn` are 409, the rest are 422. All
+codes match the brief's 4.0 sample.
 
-**Why:** FastAPI runs a normal `def` endpoint in a pool of worker threads, so two requests could use the one connection at the same moment. An `async def` endpoint runs on the server's single event-loop thread, one request at a time, so the connection is never used twice at once. That also means two members borrowing the last copy at the same moment are handled one after the other, and the second one sees the true state. The thread check had to be switched off because the test client runs each request in its own helper thread. The alternative, ordinary `def` endpoints with a lock around every database call, would work but adds code and slows every request.
+## D2 `async def` endpoints with one shared connection
+
+**What:** Every endpoint is `async def` with no `await` inside, and the server shares one
+SQLite connection.
+
+**Why:** SQLite's connection can only be used from the thread that made it. This runs all
+requests on one thread, one at a time, so no lock is needed. Two members borrowing the last
+copy at the same moment are handled in turn: the second one sees the true state and gets R7.
+
+## D3 CORS
+
+**What:** Only `http://localhost:5173` is allowed (from `WEB_ORIGIN`), for `GET` and `POST`.
+
+**Why:** Allowing `*` would let any website call the API from a member's browser.
+
+## D4 ISBN is checked in Python, not in Pydantic
+
+**What:** The request schema takes `isbn` as a plain string.
+
+**Why:** The server must keep the last word, and the message has to match the console
+character for character. Pydantic would return its own message and the wrong error code.
+
+## D5 Where the search state lives
+
+**What:** The search text, category and sort live in the URL query string (`useSearchParams`).
+Each details link carries that query string, and "Back to results" uses it.
+
+**Why:** State inside the catalogue page is lost when the page unmounts, so "Back to results"
+would show an empty search. The URL survives navigation, reload, the browser's back button and
+a shared link, and no extra state needs to be kept in sync.

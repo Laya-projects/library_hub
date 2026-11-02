@@ -144,3 +144,49 @@ button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.navbar a.active {
+  text-decoration: underline;
+}
+
+.navbar a:focus-visible {
+  outline: 3px solid #f59e0b;
+  outline-offset: 2px;
+}
+
+/* The whole card is clickable through its title link, and the buttons stay separate. */
+.book-card {
+  position: relative;
+}
+
+.book-card h3 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.book-card h3 a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.book-card h3 a:focus-visible {
+  outline: none;
+}
+
+.book-card:has(h3 a:focus-visible) {
+  outline: 3px solid #f59e0b;
+}
+
+.book-card button {
+  position: relative;
+  z-index: 1;
+}
+
+.details {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  max-width: 520px;
+}

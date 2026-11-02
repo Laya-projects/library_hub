@@ -1,15 +1,18 @@
 import { useState } from "react";
+import { Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import Navbar from "./components/Navbar";
 import CataloguePage from "./pages/CataloguePage";
-import AddItemForm from "./components/AddItemForm";
+import BookDetailsPage from "./pages/BookDetailsPage";
+import MyLoansPage from "./pages/MyLoansPage";
+import BasketPage from "./pages/BasketPage";
+import AddItemPage from "./pages/AddItemPage";
+import NotFoundPage from "./pages/NotFoundPage";
 import { sampleMembers } from "./data/sampleMembers";
 
 export default function App() {
   // Temporary: B6 moves this into MemberContext.
   const [memberId, setMemberId] = useState(sampleMembers[0].member_id);
-  // Temporary: B5 replaces this with routing.
-  const [refreshKey, setRefreshKey] = useState(0);
 
   return (
     <Layout
@@ -22,9 +25,14 @@ export default function App() {
         />
       }
     >
-      <CataloguePage refreshKey={refreshKey} />
-      <h2>Add item (librarian)</h2>
-      <AddItemForm onCreated={() => setRefreshKey((k) => k + 1)} />
+      <Routes>
+        <Route path="/" element={<CataloguePage />} />
+        <Route path="/books/:isbn" element={<BookDetailsPage />} />
+        <Route path="/me" element={<MyLoansPage />} />
+        <Route path="/basket" element={<BasketPage />} />
+        <Route path="/admin/add" element={<AddItemPage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
     </Layout>
   );
 }

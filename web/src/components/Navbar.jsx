@@ -1,10 +1,15 @@
+import { Link, NavLink } from "react-router-dom";
+
 export default function Navbar({ basketCount, members, currentMemberId, onMemberChange }) {
     return (
         <nav className="navbar" aria-label="Main">
-            <span className="brand">LibraryHub Mini</span>
-            <a href="#catalogue">Catalogue</a>
-            <a href="#me">My loans</a>
-            <a href="#basket">Basket ({basketCount})</a>
+            <Link to="/" className="brand">
+                LibraryHub Mini
+            </Link>
+            <NavLink to="/" end>Catalogue</NavLink>
+            <NavLink to="/me">My loans</NavLink>
+            <NavLink to="/basket">Basket ({basketCount})</NavLink>
+            <NavLink to="/admin/add">Add item</NavLink>
             <label>
                 Member{" "}
                 <select value={currentMemberId} onChange={(e) => onMemberChange(e.target.value)}>
